@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏷️ R 글자수 카운터</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* ── 카운터 전용 레이아웃: 중앙 정렬 ── */
+  .counter-wrap {
+    display: block;            /* 그리드 해제 → 1단 */
+    width: 100%;
+    max-width: 64rem;
+	/* 4xl = 56rem (896px) */
+	/* 5xl = 64rem (1024px) */
+	/* 6xl = 72rem (1152px) */
+	/* 7xl = 80rem (1280px) */
+    margin: 0 auto;            /* 가운데 정렬 */
+    padding: 24px 16px;        /* 상하/좌우 여백 */
+	flex: 1 1 0;               /* 남은 가로 공간 차지 */
+	min-height: 0;             /* flex 자식에서 overflow가 동작하려면 필수 */
+	overflow-y: auto;          /* 내용이 길면 세로 스크롤 */
+  }
+  .counter-wrap .panel {
+    margin: 0 0 16px;          /* 패널 간 간격만 */
+  }
+  .counter-wrap .panel:last-child {
+    margin-bottom: 0;
+  }
+  #drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 4px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    color: var(--muted);
+    background: var(--bg);
+  }
+  #drop-zone:hover, #drop-zone.dragover {
+    border-color: var(--accent);
+    background: var(--panel2);
+    color: var(--text);
+  }
+  #drop-zone .big { font-size: 1.1em; display: block; margin-bottom: 6px; }
+  #file-input { display: none; }
+  .result-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .result-table th, .result-table td {
+    padding: 10px 12px; text-align: left;
+    border-bottom: 1px solid var(--border); font-size: 0.95em;
+  }
+  .result-table th {
+    color: var(--accent); font-weight: 600; border-bottom: 2px solid var(--border);
+  }
+  .result-table td.num {
+    text-align: right; font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--green);
+  }
+  .file-name { color: var(--text); word-break: break-all; }
+  .empty { color: var(--muted); font-style: italic; }
+  .summary-box { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+  .summary-card {
+    flex: 1 1 180px; background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; padding: 14px 18px;
+  }
+  .summary-card .label { font-size: .85em; color: var(--muted); }
+  .summary-card .value {
+    font-size: 1.5em; font-weight: 700; color: var(--green);
+    font-variant-numeric: tabular-nums;
+  }
+  .summary-card.total .value { color: var(--warn); }
+  .note { font-size: .82em; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+  button {
+    background: var(--accent); color: var(--bg); border: 1px solid var(--accent); border-radius: 4px;
+    padding: 8px 18px; font-weight: 700; cursor: pointer; font-size: .9em;
+  }
+  button:hover { filter: brightness(1.2); }
+
+  /* 모바일에서는 좌우 여백만 조금 줄임 */
+  @media (max-width: 600px) {
+    .counter-wrap { padding: 16px 12px; }
+  }
+</style>
+</head>
+<!-- era_Counter -->
+<body data-page="counter">
+
+<div class="header">
+  <h1>🏷️ Era R 구상 글자수 카운터</h1>
+  <nav class="header-nav">
+    <a href="era_Readme.html" data-nav="readme">도움말</a>
+    <a href="era_Editer_Act.html" data-nav="act">액션 편집기</a>
+    <a href="era_Editer_Event.html" data-nav="event">이벤트 편집기</a>
+    <a href="era_Editer_Talk.html" data-nav="talk">대화 편집기</a>
+    <a href="count.html" data-nav="counter" class="active">글자수 계산기</a>
+  </nav>
+</div>
+
+<div class="main-container">
+  <!-- side_Csv.html을 띄우는 사이드바 영역 추가 -->
+  <div class="sidebar">
+    <iframe id="strFrame" src="../side/side_Csv.html" title="사이드바 뷰어"></iframe>
+  </div>
+    <div class="counter-wrap">
+
+      <div class="panel">
+        <h2>파일 불러오기</h2>
+        <div class="panel-body">
+          <div id="drop-zone">
+            <span class="big">여기에 ERB 파일을 드래그하거나 클릭해서 선택하세요</span>
+            <span>여러 파일 동시 선택 가능 (.erb, .ERB)</span>
+          </div>
+          <input type="file" id="file-input" multiple accept=".erb,.ERB">
+          <div class="note">
+            <b style="color:var(--warn);">※ 구상 편집기와 동일한 기준으로 계산합니다.</b><br>
+            · <code>PRINTFORML/W/DL/DW, PRINTL/W/DL, PRINT, PRINTSL/S 등</code> <b style="color:var(--warn);">명령어 뒤의 텍스트만</b> 카운트<br>
+            · 주석(<code>;</code>)·함수 정의(<code>@</code>)·IF/ELSE/SELECTCASE 코드·빈 줄은 카운트 제외<br>
+            · 빈 대사 <code>「」</code> 만 제외하고, <b style="color:var(--warn);">입력칸 안의 공백·기호·괄호·영문·숫자 전부 포함</b>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>계산 결과</h2>
+        <div class="panel-body">
+          <div class="summary-box">
+            <div class="summary-card">
+              <div class="label">불러온 파일 수</div>
+              <div class="value" id="file-count">0</div>
+            </div>
+            <div class="summary-card total">
+              <div class="label">총 글자수</div>
+              <div class="value" id="total-count">0</div>
+            </div>
+          </div>
+          <table class="result-table">
+            <thead>
+              <tr><th>파일명</th><th style="text-align:right;">글자수</th></tr>
+            </thead>
+            <tbody id="result-body">
+              <tr><td colspan="2" class="empty">아직 파일을 불러오지 않았습니다.</td></tr>
+            </tbody>
+          </table>
+          <div style="margin-top:14px;">
+            <button id="clear-btn">초기화</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────
+// js_edit.js 와 동일한 정규식
+// ─────────────────────────────────────────────────────────
+const LINE_REGEX = /^(\s*)(PRINTFORML|PRINTFORMW|PRINTFORMDL|PRINTFORMDW|PRINTL|PRINTW|PRINTDL|PRINT|PRINTSL|PRINTS)(?:\s+(.*))?$/;
+const FUNC_REGEX = /^\s*@([A-Za-z0-9_]+)/;
+const IF_REGEX = /^\s*(IF|ELSEIF|ELSE|ENDIF|SELECTCASE|CASE|CASEELSE|ENDSELECT)\b(.*)$/;
+
+// 에디터의 getContentCharCount 와 동일
+function getContentCharCount(lines) {
+  let total = 0;
+  lines.forEach(line => {
+    let txt = line.text;
+    if (/^「\s*」$/.test(txt.trim())) return; // 빈 대사만 제외
+    total += txt.length;
+  });
+  return total;
+}
+
+// 에디터의 parseAndGroup 로직을 이식 (PRINT 그룹만 수집)
+function countByEditorRule(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+  const originalLines = text.split('\n');
+  let grandTotal = 0;
+  let inFunction = false;
+  let currentGroup = null;
+
+  function flushGroup() {
+    if (currentGroup && currentGroup.length > 0) {
+      grandTotal += getContentCharCount(currentGroup);
+    }
+    currentGroup = null;
+  }
+
+  originalLines.forEach((line) => {
+    let cleanLine = line.replace(/\r$/, '');
+
+    let funcMatch = cleanLine.match(FUNC_REGEX);
+    if (funcMatch) {
+      flushGroup();
+      inFunction = true;
+      return;
+    }
+
+    if (!inFunction) return;
+
+    let ifMatch = cleanLine.match(IF_REGEX);
+    if (ifMatch) {
+      flushGroup();
+      return;
+    }
+
+    let match = cleanLine.match(LINE_REGEX);
+    if (match) {
+      const textPart = match[3] || '';
+      if (currentGroup === null) currentGroup = [];
+      currentGroup.push({ text: textPart });
+    } else {
+      flushGroup();
+    }
+  });
+
+  flushGroup();
+  return grandTotal;
+}
+
+// ─────────────────────────────────────────────────────────
+// UI
+// ─────────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const resultBody = document.getElementById('result-body');
+const fileCountEl = document.getElementById('file-count');
+const totalCountEl = document.getElementById('total-count');
+const clearBtn = document.getElementById('clear-btn');
+
+let fileResults = [];
+
+function render() {
+  if (fileResults.length === 0) {
+    resultBody.innerHTML = '<tr><td colspan="2" class="empty">아직 파일을 불러오지 않았습니다.</td></tr>';
+  } else {
+    resultBody.innerHTML = fileResults.map(r =>
+      `<tr>
+        <td class="file-name">${escapeHtml(r.name)}</td>
+        <td class="num">${r.count.toLocaleString()}</td>
+      </tr>`
+    ).join('');
+  }
+  const total = fileResults.reduce((s, r) => s + r.count, 0);
+  fileCountEl.textContent = fileResults.length;
+  totalCountEl.textContent = total.toLocaleString();
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+async function handleFiles(fileList) {
+  const files = Array.from(fileList);
+  for (const file of files) {
+    const text = await file.text();
+    const count = countByEditorRule(text);
+    fileResults.push({ name: file.name, count });
+  }
+  render();
+}
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length) {
+    handleFiles(e.target.files);
+    fileInput.value = '';
+  }
+});
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('dragover');
+});
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) {
+    handleFiles(e.dataTransfer.files);
+  }
+});
+clearBtn.addEventListener('click', () => {
+  fileResults = [];
+  render();
+});
+
+render();
+</script>
+
+</body>
+</html>

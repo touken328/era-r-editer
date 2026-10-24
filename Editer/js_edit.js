@@ -1,8 +1,8 @@
 /* =========================================================
-   js_edit.js - ERB 공통 편집기 (Talk / Event / Act 공용)
+   js_edit.js - ERB 공통 편집기 (Talk / Event / Act 공용 통합본)
    - PRINT 명령어 파싱 및 그룹화
-   - 함수별 렌더링 (카테고리 그룹화는 페이지 스크립트에서 처리)
-   - 출력 / 저장 / 복사 / 캐릭터 번호 변경 / 내용 비우기 / 초기화
+   - 조건식 더블클릭 인라인 수정 지원
+   - 캐릭터 번호 변경 시 입력 내용(Draft) 보존 및 프리뷰 연동
    ========================================================= */
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
@@ -20,40 +20,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const SAVED_FILES_KEY = 'era_erb_saved_files';
   let lastDirHandle = null;
 
-  // PRINT 명령어 계열 모두 포함 (W, DL 계열 포함)
   const LINE_REGEX = /^(\s*)(PRINTFORML|PRINTFORMW|PRINTFORMDL|PRINTFORMDW|PRINTL|PRINTW|PRINTDL|PRINT|PRINTSL|PRINTS)(?:\s+(.*))?$/;
   const FUNC_REGEX = /^\s*@([A-Za-z0-9_]+)/;
   const IF_REGEX = /^\s*(IF|ELSEIF|ELSE|ENDIF|SELECTCASE|CASE|CASEELSE|ENDSELECT)\b(.*)$/;
 
-/* =========================================================
-   캐릭터 번호(K번호) 추출/치환 정규식
-   - EVENT/ACT/REACT 형식: KOJO_EVENT_K<캐릭터번호>_<번호>
-                          KOJO_ACT_K<캐릭터번호>_<번호>
-                          KOJO_REACT_K<캐릭터번호>_<번호>
-     → K 뒤의 숫자가 캐릭터 번호
-   - TALK 형식:           KOJO_TALK<대화번호>_K<캐릭터번호>
-     → K 뒤(끝)의 숫자가 캐릭터 번호
-   ========================================================= */
+  // 범용 캐릭터 번호(K번호) 추출 및 치환 정규식
+  const KOJO_IDENT_SRC = 'KOJO_[A-Za-z]+\\d*_K(\\d+)';
+  const KOJO_CHAR_NUM_REGEXES = [
+    new RegExp(KOJO_IDENT_SRC)
+  ];
 
-// 함수명에서 캐릭터 번호 추출 (두 형식 모두 대응)
-const KOJO_CHAR_NUM_REGEXES = [
-  /^KOJO_(?:EVENT|ACT|REACT)_K(\d+)_/,   // KOJO_EVENT_K12_11
-  /^KOJO_TALK\d+_K(\d+)$/                // KOJO_TALK31_K12
-];
-
-// 원본 라인에서 캐릭터 번호만 교체 (두 형식 모두 대응)
-// - EVENT/ACT/REACT: KOJO_XXX_K<캐릭터번호>_  → KOJO_XXX_K<newK>_
-// - TALK:            KOJO_TALK<번호>_K<캐릭터번호> → KOJO_TALK<번호>_K<newK>
-const KOJO_CHAR_REPLACE_RULES = [
-  {
-    regex: /\bKOJO_(EVENT|ACT|REACT)_K\d+_/g,
-    replace: (match, type, newK) => 'KOJO_' + type + '_K' + newK + '_'
-  },
-  {
-    regex: /\bKOJO_(TALK\d+)_K\d+/g,
-    replace: (match, talkNum, newK) => 'KOJO_' + talkNum + '_K' + newK
+  function replaceKojoCharNum(line, newK) {
+    return line.replace(new RegExp('(KOJO_[A-Za-z]+\\d*_K)\\d+', 'g'), '$1' + newK);
   }
-];
 
   /* =========================================================
      파일 로드
@@ -73,29 +52,20 @@ const KOJO_CHAR_REPLACE_RULES = [
       originalLines = text.split('\n');
       parseAndGroup();
 
-      // 현재 파일의 캐릭터 번호 자동 입력
-      // (KOJO_TALK_K번호_ / KOJO_EVENT_K번호_ / KOJO_ACT_K번호_ / KOJO_REACT_K번호_)
       const charNumInput = document.getElementById('charNumInput');
       if (renderGroups.length > 0) {
         const firstName = renderGroups[0].name;
-        const charNumInput = document.getElementById('charNumInput');
-if (renderGroups.length > 0) {
-  const firstName = renderGroups[0].name;
-  let found = '';
-  for (const re of KOJO_CHAR_NUM_REGEXES) {
-    const m = firstName.match(re);
-    if (m) { found = m[1]; break; }
-  }
-  charNumInput.value = found;
-} else {
-  charNumInput.value = '';
-}
+        let found = '';
+        for (const re of KOJO_CHAR_NUM_REGEXES) {
+          const m = firstName.match(re);
+          if (m) { found = m[1]; break; }
+        }
+        charNumInput.value = found;
       } else {
         charNumInput.value = '';
       }
 
       renderEditor();
-      // 페이지별 후처리(카테고리 재구성 등)를 위한 커스텀 이벤트
       document.dispatchEvent(new CustomEvent('erb:rendered'));
       setTimeout(autoResizeAll, 0);
     };
@@ -211,9 +181,6 @@ if (renderGroups.length > 0) {
 
   /* =========================================================
      렌더링
-     - 기본적으로 모든 함수를 [기타] 하나의 카테고리로 렌더링.
-     - 페이지 스크립트(era_Editer_Talk.html 등)가 'erb:rendered' 이벤트를
-       받아 카테고리를 재구성한다.
      ========================================================= */
   function renderEditor() {
     if (renderGroups.length === 0) {
@@ -226,7 +193,6 @@ if (renderGroups.length > 0) {
     let grandTotalChars = 0;
     let html = '';
 
-    // 전체 함수를 하나의 [기타] 카테고리로 묶어 렌더링
     html += `<div class="category-group" id="cat_all">`;
     html += `  <div class="category-header" onclick="toggleCategory(this)">`;
     html += `    <span>`;
@@ -276,12 +242,6 @@ if (renderGroups.length > 0) {
             }
             if (line.cmd !== firstCmd) isMixed = true;
           });
-
-          let cmdLabel = firstCmd;
-          if (isMixed) {
-            const cmds = [...new Set(block.lines.map(l => l.cmd))];
-            cmdLabel = cmds.join(' / ');
-          }
 
           const startIdx = block.lines[0].lineIndex;
           const endIdx = block.lines[block.lines.length - 1].lineIndex;
@@ -450,6 +410,7 @@ if (renderGroups.length > 0) {
 
   window.addEventListener('resize', autoResizeAll);
 
+  // 조건식 더블클릭 인라인 수정 기능 복구
   document.addEventListener('dblclick', (e) => {
     if (e.target.classList.contains('condition')) {
       const span = e.target;
@@ -497,9 +458,7 @@ if (renderGroups.length > 0) {
   });
 
   /* =========================================================
-     이동 (함수명 접미사로 검색)
-     - 접미사 매칭: KOJO_*_K*_<번호> 형태에서 번호 검색
-     - TALK / EVENT / ACT / REACT 모두 대응
+     이동 기능
      ========================================================= */
   function findAndScroll() {
     const input = document.getElementById('findIdInput');
@@ -517,27 +476,10 @@ if (renderGroups.length > 0) {
       if (!header) continue;
       const funcName = header.textContent.replace('@', '').trim();
 
-// EVENT/ACT/REACT: KOJO_XXX_K<캐릭터번호>_<번호> → 접미사 _<번호>
-// TALK:            KOJO_TALK<대화번호>_K<캐릭터번호> → KOJO_TALK<대화번호> 매칭
-let isMatch = false;
-
-// EVENT/ACT/REACT
-if (/^KOJO_(EVENT|ACT|REACT)_K\d+_\d+$/.test(funcName) && funcName.endsWith('_' + targetId)) {
-  isMatch = true;
-}
-
-// TALK: 입력값이 대화번호와 일치하는지 확인
-if (!isMatch) {
-  const talkMatch = funcName.match(/^KOJO_TALK(\d+)_K\d+$/);
-  if (talkMatch && talkMatch[1] === targetId) {
-    isMatch = true;
-  }
-}
-
-if (isMatch) {
-  found = group;
-  break;
-}
+      if (funcName.includes('_' + targetId) || funcName.endsWith('_' + targetId)) {
+        found = group;
+        break;
+      }
     }
 
     if (found) {
@@ -590,44 +532,7 @@ if (isMatch) {
   });
 
   /* =========================================================
-     캐릭터 번호 일괄 변경
-     - KOJO_TALK_K*, KOJO_EVENT_K*, KOJO_ACT_K*, KOJO_REACT_K* 모두 대응
-     ========================================================= */
-  document.getElementById('btnChangeCharNum').addEventListener('click', () => {
-    if (originalLines.length === 0) {
-      alert('먼저 .erb 파일을 불러와 주세요.');
-      return;
-    }
-
-    const newK = document.getElementById('charNumInput').value.trim();
-    if (!newK || !/^\d+$/.test(newK)) {
-      alert('변경할 캐릭터 번호(K번호)를 숫자로 입력해 주세요.');
-      return;
-    }
-
-    if (!confirm('모든 KOJO_TALK_K* / KOJO_EVENT_K* / KOJO_ACT_K* / KOJO_REACT_K* 함수의 캐릭터 번호를 K' + newK + ' 로 변경하시겠습니까?')) {
-      return;
-    }
-
-    originalLines = originalLines.map(line => {
-  let result = line;
-  KOJO_CHAR_REPLACE_RULES.forEach(rule => {
-    result = result.replace(rule.regex, (match, group1) => {
-      return rule.replace(match, group1, newK);
-    });
-  });
-  return result;
-});
-
-    parseAndGroup();
-    renderEditor();
-    document.dispatchEvent(new CustomEvent('erb:rendered'));
-    setTimeout(autoResizeAll, 0);
-    previewStatus.textContent = '캐릭터 번호가 K' + newK + ' 로 변경되었습니다.';
-  });
-
-  /* =========================================================
-     이름/조사 변환
+     이름/조사 변환 및 조건식 변환 헬퍼
      ========================================================= */
   function applyNameAndJosaConversion(text, placeholder, callName) {
     const patterns = [
@@ -665,13 +570,10 @@ if (isMatch) {
   }
 
   /* =========================================================
-     출력
+     출력 결과 생성 및 프리뷰 갱신 공통 함수
      ========================================================= */
-  document.getElementById('btnOutput').addEventListener('click', () => {
-    if (originalLines.length === 0) {
-      alert('먼저 .erb 파일을 불러와 주세요.');
-      return;
-    }
+  function updatePreview() {
+    if (originalLines.length === 0) return;
 
     const textareas = document.querySelectorAll('.group-input');
     const replacements = [];
@@ -695,7 +597,7 @@ if (isMatch) {
 
       const paragraphs = rawText.split(/\n\s*\n/);
 
-      let firstLineMatch = originalLines[startIdx].match(LINE_REGEX);
+      let firstLineMatch = originalLines[startIdx] ? originalLines[startIdx].match(LINE_REGEX) : null;
       let originalIndent = firstLineMatch ? firstLineMatch[1] : '';
       let targetIndent = originalIndent || ('\t'.repeat(depth));
 
@@ -707,7 +609,7 @@ if (isMatch) {
 
         lines.forEach((line, i) => {
           let cmd;
-          if (/^「.*」$/.test(line)) {
+          if (/^／.*／$/.test(line) || /^「.*」$/.test(line)) {
             cmd = (i === lines.length - 1) ? 'PRINTFORMW' : 'PRINTFORML';
           } else {
             cmd = (i === lines.length - 1) ? 'PRINTFORMDW' : 'PRINTFORMDL';
@@ -739,7 +641,63 @@ if (isMatch) {
     resultCode = transformRandConditions(resultCode);
 
     previewArea.textContent = resultCode;
+  }
+
+  /* =========================================================
+     출력 버튼 이벤트
+     ========================================================= */
+  document.getElementById('btnOutput').addEventListener('click', () => {
+    if (originalLines.length === 0) {
+      alert('먼저 .erb 파일을 불러와 주세요.');
+      return;
+    }
+
+    updatePreview();
     previewStatus.textContent = '출력 완료';
+  });
+
+  /* =========================================================
+     캐릭터 번호 일괄 변경 (입력 내용 보존 및 프리뷰 연동)
+     ========================================================= */
+  document.getElementById('btnChangeCharNum').addEventListener('click', () => {
+    if (originalLines.length === 0) {
+      alert('먼저 .erb 파일을 불러와 주세요.');
+      return;
+    }
+
+    const newK = document.getElementById('charNumInput').value.trim();
+    if (!newK || !/^\d+$/.test(newK)) {
+      alert('변경할 캐릭터 번호(K번호)를 숫자로 입력해 주세요.');
+      return;
+    }
+
+    if (!confirm('모든 함수의 캐릭터 번호를 K' + newK + ' 로 변경하시겠습니까?')) {
+      return;
+    }
+
+    // 작성 중인 내용(Draft) 보존
+    const draft = {};
+    document.querySelectorAll('.group-input').forEach(ta => {
+      draft[ta.dataset.start] = ta.value;
+    });
+
+    originalLines = originalLines.map(line => replaceKojoCharNum(line, newK));
+
+    parseAndGroup();
+    renderEditor();
+    document.dispatchEvent(new CustomEvent('erb:rendered'));
+
+    // 편집 내용 복원
+    document.querySelectorAll('.group-input').forEach(ta => {
+      if (Object.prototype.hasOwnProperty.call(draft, ta.dataset.start)) {
+        ta.value = draft[ta.dataset.start];
+      }
+    });
+    setTimeout(autoResizeAll, 0);
+
+    updatePreview();
+
+    previewStatus.textContent = '캐릭터 번호가 K' + newK + ' 로 변경되었습니다.';
   });
 
   /* =========================================================
@@ -890,7 +848,6 @@ if (isMatch) {
       .replace(/'/g, "&#039;");
   }
 
-  // 헤더 네비게이션 초기화 (EraCommon 이 존재하는 경우에만)
   if (window.EraCommon && typeof window.EraCommon.initHeaderNav === 'function') {
     const page = document.body.getAttribute('data-page') || 'talk';
     window.EraCommon.initHeaderNav(page);

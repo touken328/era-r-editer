@@ -254,8 +254,10 @@ body{
 }
 .func-group.act { border-color: var(--blue3); background: var(--panel); }
 .func-group.react { border-color: var(--pink3); background: var(--panel2); }
+.func-group.com { border-color: var(--pink3); background: var(--panel); }
 .func-group.act .func-header { background: var(--blue2); color: var(--accent); border-bottom-color: var(--blue3); }
 .func-group.react .func-header { background: var(--pink2); color: var(--err); border-bottom-color: var(--pink3); }
+.func-group.com .func-header { background: var(--pink2); color: var(--err); border-bottom-color: var(--pink3); }
 .func-group.ev { border-color: var(--green2); background: var(--panel2); }
 .func-group.ev .func-header { background: var(--green3); color: var(--green); border-bottom-color: var(--green2); }
 .func-group.highlight {
@@ -293,7 +295,7 @@ body{
   flex-wrap: nowrap;
   gap: 6px;
 }
-.print-meta .char-count { color: var(--warn); }
+.print-meta .char-count { color: var(--green); }
 
 .print-meta .branch {
   color: #fff;

@@ -12,12 +12,13 @@
 <div class="header">
   <h1>✏️ Era R 액션/리액션 구상 에디터 [Act]</h1>
   <input type="file" id="fileInput" accept=".erb,.txt">
-  <span style="font-size:12px; color:var(--muted);" id="fileStatus">액션 파일(KOJO_ACT_K.ERB)을 선택해 주세요.</span>
+  <span style="font-size:12px; color:var(--muted);" id="fileStatus">액션(KOJO_ACT_K.ERB) / 리액션(KOJO_REACT_K.ERB) / 범용 답변(KOJO_COM_K번호.ERB) 파일 대응</span>
   <nav class="header-nav">
     <a href="era_Readme.html" data-nav="readme">도움말</a>
     <a href="era_Editer_Act.html"   data-nav="act" class="active">액션 편집기</a>
     <a href="era_Editer_Event.html" data-nav="event">이벤트 편집기</a>
     <a href="era_Editer_Talk.html"  data-nav="talk">대화 편집기</a>
+    <a href="count.html" data-nav="counter">글자수 계산기</a>
   </nav>
 </div>
 
@@ -181,9 +182,12 @@
       } else if (funcName.startsWith('KOJO_REACT')) {
         fg.classList.remove('ev');
         fg.classList.add('react');
+      } else if (funcName.startsWith('KOJO_COM')) {
+        fg.classList.remove('ev');
+        fg.classList.add('com');
       }
 
-      if (!/^KOJO_(ACT|REACT)_K\d+_\d+$/.test(funcName)) return;
+      if (!/^KOJO_(ACT|REACT|COM)_K\d+_\d+$/.test(funcName)) return;
 
       fg.querySelectorAll('.print-meta').forEach(meta => {
         if (meta.querySelector('.func-tags')) return;
@@ -225,7 +229,7 @@
       const funcName = headerEl.textContent.replace('@', '').trim();
 
       // 액션/리액션 함수만 대상
-      if (!/^KOJO_(ACT|REACT)_K\d+_\d+$/.test(funcName)) {
+      if (!/^KOJO_(ACT|REACT|COM)_K\d+_\d+$/.test(funcName)) {
         unassigned.push(fg);
         return;
       }
@@ -332,23 +336,11 @@
      캐릭터 번호 변경 버튼 오버라이드 (KOJO_ACT/REACT 대응)
      - js_edit.js 의 기존 리스너를 제거하기 위해 cloneNode 로 교체
      ========================================================= */
+  // js_edit.js 에서 이미 모든 KOJO_* 형식에 대한 변경 로직을 처리하므로,
+  // 이 페이지에서의 오버라이드는 제거합니다.
   function overrideChangeCharNum() {
-    const oldBtn = document.getElementById('btnChangeCharNum');
-    if (!oldBtn) return;
-    const btn = oldBtn.cloneNode(true);
-    oldBtn.parentNode.replaceChild(btn, oldBtn);
-
-    btn.addEventListener('click', () => {
-      // js_edit.js 는 originalLines 를 클로저 내부에 보관하므로 외부에서 직접 수정 불가.
-      // 대신 DOM 에서 현재 textarea 값과 원본 코드 라인 정보를 이용하지 않고,
-      // "출력"을 거치지 않고 함수명만 변경하는 방식은 불가능하므로,
-      // 파일을 다시 읽지 않고는 원본 라인에 접근할 수 없다.
-      // → 여기서는 사용자에게 안내 후, 파일 input 을 통해 재로드하도록 유도하지 않고
-      //   함수명 변경은 "출력" 전 원본 라인 기준이므로, 
-      //   간단히 경고 후 js_edit.js 의 기본 동작을 그대로 수행하도록 안내한다.
-      alert('액션 에디터의 캐릭터 번호 변경은 js_edit.js 기본 동작(KOJO_TALK/EVENT)만 지원합니다.\n' +
-            '액션 파일의 KOJO_ACT_K* / KOJO_REACT_K* 번호를 바꾸려면 텍스트 편집기에서 직접 변경해 주세요.');
-    });
+    // js_edit.js 에서 모든 KOJO_* 형식(ACT, REACT, COM 포함)에 대한 변경 로직을 처리하므로,
+    // 이 페이지에서의 오버라이드는 제거합니다.
   }
 
   /* =========================================================
@@ -377,7 +369,7 @@
         if (!header) continue;
         const funcName = header.textContent.replace('@', '').trim();
 
-        if (/^KOJO_(ACT|REACT)_K\d+_\d+$/.test(funcName) && funcName.endsWith('_' + targetId)) {
+        if (/^KOJO_(ACT|REACT|COM)_K\d+_\d+$/.test(funcName) && funcName.endsWith('_' + targetId)) {
           found = group;
           break;
         }

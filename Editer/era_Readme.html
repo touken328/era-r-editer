@@ -6,7 +6,7 @@
 <title>🏷️ R 에디터 사용법</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<!-- era_Editer_Readme.html -->
+<!-- era_Readme.html -->
 <body data-page="readme">
 
 <div class="header">
@@ -16,6 +16,7 @@
     <a href="era_Editer_Act.html"   data-nav="act">액션 편집기</a>
     <a href="era_Editer_Event.html" data-nav="event">이벤트 편집기</a>
     <a href="era_Editer_Talk.html"  data-nav="talk">대화 편집기</a>
+    <a href="count.html" data-nav="counter">글자수 계산기</a>
   </nav>
 </div>
 
@@ -27,9 +28,9 @@
         <div class="panel-body" style="line-height:2;">
           <ul style="list-style:none; padding:0; margin:0;">
             <li><a href="#common" style="color:var(--accent); text-decoration:none;">(1) 공통 안내</a> — 대사/지문 작성법 및 부호 자동 변환 등 안내</li>
-            <li><a href="#act" style="color:var(--accent); text-decoration:none;">(2) 조교 액션 편집</a> — KOJO_ACT_K번호.ERB 파일 편집 및 재활용</li>
-            <li><a href="#event" style="color:var(--accent); text-decoration:none;">(3) 조교 이벤트 편집</a> — KOJO_EVENT_K번호.ERB 파일 편집 및 재활용</li>
-            <li><a href="#talk" style="color:var(--accent); text-decoration:none;">(4) 대화 구상 편집</a> — KOJO_TALK_K번호.ERB 파일 편집 및 재활용</li>
+            <li><a href="#act" style="color:var(--accent); text-decoration:none;">(2) 조교 액션 편집</a> — KOJO_ACT_K○○.ERB / KOJO_REACT_K○○.ERB / KOJO_COM_K○○.ERB 대응</li>
+            <li><a href="#event" style="color:var(--accent); text-decoration:none;">(3) 조교 이벤트 편집</a> — KOJO_EVENT_K○○.ERB 대응</li>
+            <li><a href="#talk" style="color:var(--accent); text-decoration:none;">(4) 대화 구상 편집</a> — KOJO_TALK_K○○.ERB 대응</li>
             <li><a href="#inquiry" style="color:var(--accent); text-decoration:none;">(5) 문의사항</a> — 플레이 오류 제보 및 주의사항</li>
             <li><a href="#editor" style="color:var(--accent); text-decoration:none;">(6) 편집기 사양</a> — 온라인 테스트 작업용 링크 및 안내</li>
           </ul>
@@ -55,9 +56,15 @@
     <div class="panel" id="act">
       <h2>(2) era_Editer_Act.html [액션 편집기]</h2>
       <div class="panel-body" style="line-height:1.8;">
-        <p>ERB ▶ 口上 ▶ 캐릭터 폴더에 기 작성된 액션 구상(<code>KOJO_ACT_K번호.ERB</code>)을 불러와 액션/리액션 내용을 편집할 수 있습니다.</p>
+        <p>ERB ▶ 口上 ▶ 캐릭터 폴더에 기 작성된<br>
+		- 액션 구상 (KOJO_ACT_K번호.ERB)<br>
+		- 리액션 구상 (KOJO_REACT_K번호.ERB)<br>
+		- 범용 답변 파일 (KOJO_COM_K번호.ERB)<br>
+		등을 불러와 액션/리액션/답변 내용을 편집할 수 있습니다.</p>
         <p>대사를 추가/삭제하거나, 미번역된 부분을 번역할 수 있습니다.</p>
-        <p><b style="color:var(--warn);">[캐릭터 번호 변경]</b>과 <b style="color:var(--warn);">[내용 비우기]</b> 버튼을 통해 해당 서식을 그대로 타 캐릭터 구상에 재활용할 수 있습니다.</p>
+		<p>수정 시 <b style="color:var(--accent);">[출력]</b> 버튼을 눌러 프리뷰 창에 수정사항이 반영되었는지 확인한 뒤에 <b>[.ERB 저장]</b> 버튼을 눌러 저장해주세요.<br>
+		만약을 위해, 원본 ERB파일은 별도로 백업을 해두시는 편이 안전합니다.</p>
+        <p><b style="color:var(--warn);">[캐릭터 번호 변경]</b>과 <b style="color:var(--err);">[내용 비우기]</b> 버튼을 통해 해당 서식을 그대로 타 캐릭터 구상에 재활용할 수 있습니다.</p>
       </div>
     </div>
 
@@ -65,7 +72,7 @@
     <div class="panel" id="event">
       <h2>(3) era_Editer_Event.html [이벤트 편집기]</h2>
       <div class="panel-body" style="line-height:1.8;">
-        <p>ERB ▶ 口上 ▶ 캐릭터 폴더에 기 작성된 이벤트 구상(<code>KOJO_EVENT_K번호.ERB</code>)을 불러와 이벤트 내용을 편집할 수 있습니다.</p>
+        <p>ERB ▶ 口上 ▶ 캐릭터 폴더에 기 작성된 이벤트 구상 (KOJO_EVENT_K번호.ERB)을 불러와 이벤트 내용을 편집할 수 있습니다.</p>
         <p>활용 방식은 <b>액션 편집기 (era_Editer_Act.html)</b> 와 동일합니다.</p>
       </div>
     </div>
@@ -74,7 +81,7 @@
     <div class="panel" id="talk">
       <h2>(4) era_Editer_Talk.html [대화 편집기]</h2>
       <div class="panel-body" style="line-height:1.8;">
-        <p>ERB ▶ 口上 ▶ 캐릭터 폴더에 기 작성된 대화 구상(<code>KOJO_TALK_K번호.ERB</code>)을 불러와 이벤트 내용을 편집할 수 있습니다.</p>
+        <p>ERB ▶ 口上 ▶ 캐릭터 폴더에 기 작성된 대화 구상 (KOJO_TALK_K번호.ERB)을 불러와 이벤트 내용을 편집할 수 있습니다.</p>
         <p>활용 방식은 <b>액션 편집기 (era_Editer_Act.html)</b> 와 동일합니다.</p>
       </div>
     </div>

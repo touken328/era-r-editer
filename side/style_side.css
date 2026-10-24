@@ -14,7 +14,7 @@
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   }
   .csv-line { display: flex; margin-bottom: 2px; }
-  .csv-id { color: var(--warn); width: 45px; flex-shrink: 0; text-align: right; margin-right: 10px; }
+  .csv-id { color: var(--warn); width: 30px; flex-shrink: 0; text-align: right; margin-right: 10px; }
   .csv-text { flex: 1; }
   .csv-textset { flex: 1; color: var(--green); }
   .csv-comment { color: var(--muted); font-size: 14px; text-align: center; }
