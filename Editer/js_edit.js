@@ -593,6 +593,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }).join('\n');
 
       rawText = applyNameAndJosaConversion(rawText, '이름', '%CALLNAME:MASTER%');
+      rawText = applyNameAndJosaConversion(rawText, '당신', '%CALLNAME:MASTER%');
+      rawText = applyNameAndJosaConversion(rawText, '주인', '%CALLNAME:MASTER%');
       rawText = applyNameAndJosaConversion(rawText, '남사', '%CALLNAME:TARGET%');
 
       const paragraphs = rawText.split(/\n\s*\n/);
