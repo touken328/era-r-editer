@@ -741,9 +741,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await writable.write('\uFEFF' + text);
         await writable.close();
 
-        savedFiles.push(finalName);
-        try { localStorage.setItem(SAVED_FILES_KEY, JSON.stringify(savedFiles)); } catch (e) {}
-
         previewStatus.textContent = '저장 완료: ' + finalName;
       } catch (err) {
         if (err.name === 'AbortError') return;
