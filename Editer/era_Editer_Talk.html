@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R 대화 구상 에디터</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<!-- era_Editer 정의 -->
+<body data-page="talk">
+
+<div class="header">
+  <h1>✏️ Era R 대화 구상 에디터 [Talk]</h1>
+  <input type="file" id="fileInput" accept=".erb,.txt">
+  <span style="font-size:12px; color:var(--muted);" id="fileStatus">대화 파일(KOJO_TALK_K.ERB)을 선택해 주세요.</span>
+  <nav class="header-nav">
+    <a href="era_Editer_Act.html"   data-nav="act">액션 편집기</a>
+    <a href="era_Editer_Event.html" data-nav="event">이벤트 편집기</a>
+    <a href="era_Editer_Talk.html"  data-nav="talk" class="active">대화 편집기</a>
+  </nav>
+</div>
+
+<div class="main-container">
+  <div class="sidebar">
+    <iframe id="strFrame" src="../side/side_Talk.html" title="사이드바 뷰어"></iframe>
+  </div>
+
+  <div class="editor-wrap" id="editorArea">
+    <div style="color:var(--muted); text-align:center; margin-top:50px;">
+      .erb 파일을 불러오면<br>여기에 수정할 텍스트 목록이 나타납니다.
+    </div>
+  </div>
+
+  <div class="preview-wrap">
+    <div class="preview-header">
+      <span>출력 결과 프리뷰</span>
+      <span id="previewStatus" style="font-size:12px; color:var(--muted);">대기 중</span>
+    </div>
+    <pre class="preview-content" id="previewArea">(출력 버튼을 누르면 여기에 원본 코드가 표시됩니다.)</pre>
+  </div>
+</div>
+
+<div class="toolbar">
+  <span id="totalCharsDisplay" class="total-chars">총 글자수 : 0 자</span>
+
+  <button id="btnCollapseAll" type="button">전부 접기</button>
+  <button id="btnExpandAll" type="button">전부 펼치기</button>
+  <input type="text" id="findIdInput" class="find-input" placeholder="대화번호" autocomplete="off">
+  <button id="btnFind">이동</button>
+
+  <input type="text" id="charNumInput" class="find-input-char" placeholder="K번호" autocomplete="off">
+  <button id="btnChangeCharNum" type="button">캐릭터 번호 변경</button>
+
+  <button id="btnOutput" class="primary">출력</button>
+  <button id="btnSave">.ERB 저장</button>
+  <button id="btnCopy">복사</button>
+
+  <div class="spacer"></div>
+  <button id="btnClearContent" type="button" class="delete">내용 비우기</button>
+  <button id="btnClear">초기화</button>
+</div>
+
+<!-- 공통 편집기 로직 -->
+<script src="js_edit.js"></script>
+<!-- Talk 전용 카테고리 재구성 스크립트 -->
+<script>
+/* =========================================================
+   대화(Talk) 에디터 전용 스크립트
+   - js_edit.js 가 렌더링을 마치면 'erb:rendered' 이벤트를 발생시킴
+   - 이 이벤트를 받아 [기타] 카테고리를 Talk 전용 카테고리로 재구성
+   ========================================================= */
+document.addEventListener('DOMContentLoaded', () => {
+  'use strict';
+
+  /* Talk 카테고리 정의: 헤더 번호/제목 + 포함되는 Talk 세트 키 목록 */
+  const TALK_CATEGORIES = [
+    { key: 'talk0',  name: '0. 휴식',          sets: ['KOJO_TALK0'] },
+    { key: 'talk1',  name: '1. 잡담',          sets: ['KOJO_TALK1'] },
+    { key: 'talk2',  name: '2. 스킨십',        sets: ['KOJO_TALK2'] },
+    { key: 'talk3',  name: '3. 선물',          sets: [
+        'KOJO_TALK31', 'KOJO_TALK32', 'KOJO_TALK33', 'KOJO_TALK34',
+        'KOJO_TALK35', 'KOJO_TALK36', 'KOJO_TALK37', 'KOJO_TALK38',
+        'KOJO_TALK39', 'KOJO_TALK310', 'KOJO_TALK311', 'KOJO_TALK320',
+        'KOJO_TALK330'
+      ] },
+    { key: 'talk4',  name: '4. 술',            sets: ['KOJO_TALK41', 'KOJO_TALK40'] },
+    { key: 'talk7',  name: '7. 치료',          sets: ['KOJO_TALK7'] },
+    { key: 'talk10', name: '10. 신역',         sets: ['KOJO_TALK10', 'KOJO_TALK11'] },
+    { key: 'talk20', name: '20. 이야기 듣기',  sets: ['KOJO_TALK20'] }
+  ];
+
+  /* Talk 세트 정의: 함수 접미사 → 블록 표시 제목 */
+  const TALK_SETS = [
+    { key: 'KOJO_TALK0',    title: 'Talk 0. 휴식을 요청했고, 받아들여짐' },
+    { key: 'KOJO_TALK1',    title: 'Talk 1. 잡담을 나눈다' },
+    { key: 'KOJO_TALK2',    title: 'Talk 2. 스킨십을 한다' },
+    { key: 'KOJO_TALK31',   title: 'Talk 3. 선물 - 웃는 얼굴 (1)' },
+    { key: 'KOJO_TALK32',   title: 'Talk 3. 선물 - 붓 (2)' },
+    { key: 'KOJO_TALK33',   title: 'Talk 3. 선물 - 종이 (3)' },
+    { key: 'KOJO_TALK34',   title: 'Talk 3. 선물 - 부채 (4)' },
+    { key: 'KOJO_TALK35',   title: 'Talk 3. 선물 - 우산 (5)' },
+    { key: 'KOJO_TALK36',   title: 'Talk 3. 선물 - 화관 (6)' },
+    { key: 'KOJO_TALK37',   title: 'Talk 3. 선물 - 고급 다도구 (7)' },
+    { key: 'KOJO_TALK38',   title: 'Talk 3. 선물 - 찻잎 (8)' },
+    { key: 'KOJO_TALK39',   title: 'Talk 3. 선물 - 춘화집 (9)' },
+    { key: 'KOJO_TALK310',  title: 'Talk 3. 선물 - 카메라 (10)' },
+    { key: 'KOJO_TALK311',  title: 'Talk 3. 선물 - 물총 (11)' },
+    { key: 'KOJO_TALK320',  title: 'Talk 3. 선물 - 입고 있는 속옷 (20)' },
+    { key: 'KOJO_TALK330',  title: 'Talk 3. 선물 - 반지를 주며 청혼 (30)' },
+    { key: 'KOJO_TALK41',   title: 'Talk 4. 술을 마신다' },
+    { key: 'KOJO_TALK40',   title: 'Talk 4. 술이 없어서 대신 사니와의 XX를 마신다' },
+    { key: 'KOJO_TALK7',    title: 'Talk 7. 상태이상의 치료를 요구한다' },
+    { key: 'KOJO_TALK10',   title: 'Talk 10. 이름을 알려준다 (1회만 발생)' },
+    { key: 'KOJO_TALK11',   title: 'Talk 11. 생일을 알려준다 (1회만 발생)' },
+    { key: 'KOJO_TALK20',   title: 'Talk 20. 도검남사의 이야기를 듣는다' }
+  ];
+
+  const TALK_SET_MAP = {};
+  TALK_SETS.forEach(s => { TALK_SET_MAP[s.key] = s; });
+
+  const CAT_BY_SET = {};
+  TALK_CATEGORIES.forEach(cat => {
+    cat.sets.forEach(k => { CAT_BY_SET[k] = cat; });
+  });
+
+  /* 함수명에서 Talk 세트 키 추출: KOJO_TALK<숫자>_K<숫자> */
+  function getTalkSetKey(funcName) {
+    const m = funcName.match(/^(KOJO_TALK\d+)_K\d+$/);
+    return m ? m[1] : null;
+  }
+
+  /* =========================================================
+     [기타] 카테고리를 Talk 전용 카테고리로 재구성
+     ========================================================= */
+  function restructureTalkCategories() {
+    const editorArea = document.getElementById('editorArea');
+    if (!editorArea) return;
+
+    // js_edit.js 가 만든 .func-group.ev 들을 모두 수집
+    const allFuncGroups = Array.from(editorArea.querySelectorAll('.func-group.ev'));
+    if (allFuncGroups.length === 0) return;
+
+    // 각 함수 그룹을 Talk 카테고리별로 분류
+    const buckets = {};
+    TALK_CATEGORIES.forEach(cat => { buckets[cat.key] = []; });
+    const unassigned = [];
+
+    allFuncGroups.forEach(fg => {
+      const headerEl = fg.querySelector('.func-header');
+      if (!headerEl) { unassigned.push(fg); return; }
+      const funcName = headerEl.textContent.replace('@', '').trim();
+      const setKey = getTalkSetKey(funcName);
+      if (!setKey || !CAT_BY_SET[setKey]) {
+        unassigned.push(fg);
+        return;
+      }
+      buckets[CAT_BY_SET[setKey].key].push(fg);
+    });
+
+    // 기존 카테고리 그룹 제거 (함수 그룹 DOM 노드는 detach 되어 재사용됨)
+    Array.from(editorArea.querySelectorAll('.category-group')).forEach(cg => cg.remove());
+
+    // 새 카테고리 그룹 생성
+    TALK_CATEGORIES.forEach(cat => {
+      const funcs = buckets[cat.key];
+      if (!funcs || funcs.length === 0) return;
+
+      // 글자수 합산
+      let catChars = 0;
+      funcs.forEach(fg => {
+        fg.querySelectorAll('.char-count').forEach(el => {
+          const n = parseInt(el.textContent.replace(/[^\d]/g, ''), 10);
+          if (!isNaN(n)) catChars += n;
+        });
+      });
+
+      const catGroup = document.createElement('div');
+      catGroup.className = 'category-group';
+      catGroup.id = 'cat_' + cat.key;
+
+      const header = document.createElement('div');
+      header.className = 'category-header';
+      header.setAttribute('onclick', 'toggleCategory(this)');
+      header.innerHTML =
+        '<span>' +
+          '<span class="cat-name">[' + cat.name + ']</span> ' +
+          '<span class="cat-count">(' + funcs.length + '개)</span>' +
+          '<span class="cat-chars">/ ' + catChars.toLocaleString() + ' 자</span>' +
+        '</span>' +
+        '<button class="category-toggle">[+] 펼치기</button>';
+
+      const content = document.createElement('div');
+      content.className = 'category-content';
+
+      funcs.forEach(fg => {
+        // 블록 헤더 제목을 Talk 세트 제목으로 교체
+        const headerEl = fg.querySelector('.func-header');
+        if (headerEl) {
+          const funcName = headerEl.textContent.replace('@', '').trim();
+          const setKey = getTalkSetKey(funcName);
+          const setInfo = setKey ? TALK_SET_MAP[setKey] : null;
+          if (setInfo) {
+            headerEl.textContent = setInfo.title + '  (@' + funcName + ')';
+          }
+        }
+        content.appendChild(fg);
+      });
+
+      catGroup.appendChild(header);
+      catGroup.appendChild(content);
+      editorArea.appendChild(catGroup);
+    });
+
+    // 분류되지 않은 함수 그룹은 [기타] 로 묶어서 뒤에 추가
+    if (unassigned.length > 0) {
+      const catGroup = document.createElement('div');
+      catGroup.className = 'category-group';
+      catGroup.id = 'cat_etc';
+
+      const header = document.createElement('div');
+      header.className = 'category-header';
+      header.setAttribute('onclick', 'toggleCategory(this)');
+      header.innerHTML =
+        '<span>' +
+          '<span class="cat-name">[기타]</span> ' +
+          '<span class="cat-count">(' + unassigned.length + '개)</span>' +
+          '<span class="cat-chars">/ 0 자</span>' +
+        '</span>' +
+        '<button class="category-toggle">[+] 펼치기</button>';
+
+      const content = document.createElement('div');
+      content.className = 'category-content';
+      unassigned.forEach(fg => content.appendChild(fg));
+
+      catGroup.appendChild(header);
+      catGroup.appendChild(content);
+      editorArea.appendChild(catGroup);
+    }
+  }
+
+  /* js_edit.js 가 렌더링을 마칠 때마다 재구성 실행
+     - 파일 로드, 캐릭터 번호 변경, 내용 비우기 등에서 발생 */
+  document.addEventListener('erb:rendered', () => {
+    // 동기 렌더링 직후 실행 (js_edit.js 가 innerHTML 을 이미 교체한 상태)
+    restructureTalkCategories();
+  });
+});
+</script>
+</body>
+</html>

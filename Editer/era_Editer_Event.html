@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R 이벤트 구상 에디터</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<!-- era_Editer 정의 -->
+<body data-page="event">
+
+<div class="header">
+  <h1>✏️ Era R 이벤트 구상 에디터 [Event]</h1>
+  <input type="file" id="fileInput" accept=".erb,.txt">
+  <span style="font-size:12px; color:var(--muted);" id="fileStatus">이벤트 파일(KOJO_EVENT_K.ERB)을 선택해 주세요.</span>
+  <nav class="header-nav">
+    <a href="era_Editer_Act.html"   data-nav="act">액션 편집기</a>
+    <a href="era_Editer_Event.html" data-nav="event" class="active">이벤트 편집기</a>
+    <a href="era_Editer_Talk.html"  data-nav="talk">대화 편집기</a>
+  </nav>
+</div>
+
+<div class="main-container">
+  <div class="sidebar">
+    <iframe id="strFrame" src="../side/side_Event.html" title="사이드바 뷰어"></iframe>
+  </div>
+
+  <div class="editor-wrap" id="editorArea">
+    <div style="color:var(--muted); text-align:center; margin-top:50px;">
+      .erb 파일을 불러오면<br>여기에 수정할 텍스트 목록이 나타납니다.
+    </div>
+  </div>
+
+  <div class="preview-wrap">
+    <div class="preview-header">
+      <span>출력 결과 프리뷰</span>
+      <span id="previewStatus" style="font-size:12px; color:var(--muted);">대기 중</span>
+    </div>
+    <pre class="preview-content" id="previewArea">(출력 버튼을 누르면 여기에 원본 코드가 표시됩니다.)</pre>
+  </div>
+</div>
+
+<div class="toolbar">
+  <span id="totalCharsDisplay" class="total-chars">총 글자수 : 0 자</span>
+
+  <button id="btnCollapseAll" type="button">전부 접기</button>
+  <button id="btnExpandAll" type="button">전부 펼치기</button>
+  <input type="text" id="findIdInput" class="find-input" placeholder="이벤트번호" autocomplete="off">
+  <button id="btnFind">이동</button>
+
+  <input type="text" id="charNumInput" class="find-input-char" placeholder="K번호" autocomplete="off">
+  <button id="btnChangeCharNum" type="button">캐릭터 번호 변경</button>
+
+  <button id="btnOutput" class="primary">출력</button>
+  <button id="btnSave">.ERB 저장</button>
+  <button id="btnCopy">복사</button>
+
+  <div class="spacer"></div>
+  <button id="btnClearContent" type="button" class="delete">내용 비우기</button>
+  <button id="btnClear">초기화</button>
+</div>
+
+<!-- 공통 편집기 로직 -->
+<script src="js_edit.js"></script>
+<!-- 이벤트 전용 카테고리 재구성 + 조건 태그 스크립트 -->
+<script>
+/* =========================================================
+   이벤트(Event) 에디터 전용 스크립트
+   - js_edit.js 가 렌더링을 마치면 'erb:rendered' 이벤트를 발생시킴
+   - 이 이벤트를 받아 [기타] 카테고리를 이벤트 카테고리로 재구성
+   - 조건 태그(EVENT_TAG_MAP)를 후처리로 주입
+   ========================================================= */
+document.addEventListener('DOMContentLoaded', () => {
+  'use strict';
+
+  /* 이벤트 행동번호 카테고리 */
+  const EVENT_CATEGORIES = [
+    { name: '11. 조교 개시 구상', key: '11' },
+    { name: '12. 조교자 행동 전 구상', key: '12' },
+    { name: '13. 조교 종료 구상', key: '13' },
+    { name: '14. 탈출이벤트 전용 구상', key: '14' },
+    { name: '15. 특수 이벤트 전용 구상', key: '15' },
+    { name: '16. 대만족 보너스 구상', key: '16' },
+    { name: '17. 오늘의 방침 구상', key: '17' },
+    { name: '18. 임신', key: '18' },
+    { name: '102. 조교자 전환', key: '102' },
+    { name: '21. 조교 중 대만족', key: '21' },
+    { name: '24. 조교자 능력치 상승', key: '24' }
+  ];
+
+  /* 이벤트 함수별 조건 설명 매핑 */
+  const EVENT_TAG_MAP = {
+    '11': [
+      { test: /CFLAG:200\s*==\s*1\b/, tag: '조교자 호감도 200이상 또는 도중에 조교자 전환' },
+      { test: /TALENT:78\s*&&\s*FAVOR\(9000,\s*9000\)\s*&&\s*MONEY\s*>=\s*1000000\s*&&\s*FIRSTTIME\(99\)/, tag: '청혼' },
+      { test: /CFLAG:200\s*==\s*10\b/, tag: '조교 10회 기념' },
+      { test: /IF\s+LOCAL\s*&&\s*ARG/, tag: '조교 중지' },
+      { test: /FIRSTTIME\(189\)/, tag: '연모' },
+      { test: /FIRSTTIME\(1\)/, tag: '조교완료' },
+      { test: /FIRSTTIME\(2\)/, tag: '몹시 사랑함' },
+      { test: /FIRSTTIME\(3\)/, tag: '조교가 끝난 상태' },
+      { test: /FIRSTTIME\(4\)/, tag: '불구대천' },
+      { test: /FIRSTTIME\(5\)/, tag: '공포' },
+      { test: /FIRSTTIME\(6\)/, tag: '반발' },
+      { test: /FIRSTTIME\(7\)/, tag: '눈을 뜬다' },
+      { test: /FIRSTTIME\(8\)/, tag: '순응' },
+      { test: /FIRSTTIME\(9\)/, tag: '초반' }
+    ],
+    '12': [
+      { test: /FIRSTTIME\(10\)/, tag: '조교 중지' },
+      { test: /FIRSTTIME\(11\)/, tag: '조교 개시 직후' },
+      { test: /FIRSTTIME\(12\)/, tag: '처벌 시작' },
+      { test: /\(TFLAG:105\s*==\s*1\s*\|\|\s*TFLAG:105\s*==\s*3\)/, tag: '질내 사정 직후' },
+      { test: /TEQUIP:70\b/, tag: '성교중' },
+      { test: /NOWEX:40\b/, tag: '절정 후' },
+      { test: /NOWEX:43\b/, tag: '절정 후' },
+      { test: /NOWEX:51\b/, tag: '절정 후' },
+      { test: /TFLAG:70\s*==\s*1\b/, tag: '조교 방침 : 휴식' },
+      { test: /TFLAG:70\s*==\s*2\b/, tag: '조교 방침 : 소프트' },
+      { test: /TFLAG:70\s*==\s*3\b/, tag: '조교 방침 : 평범' },
+      { test: /TFLAG:70\s*==\s*4\b/, tag: '조교 방침 : 하드' },
+      { test: /TFLAG:70\s*==\s*5\b/, tag: '조교 방침 : 이상' },
+      { test: /TFLAG:70\s*==\s*6\b/, tag: '조교 방침 : SM' }
+    ],
+    '13': [
+      { test: /FIRSTTIME\(30\)/, tag: '실신' },
+      { test: /FIRSTTIME\(31\)/, tag: '대만족 보너스' },
+      { test: /FIRSTTIME\(20\)/, tag: '연모' },
+      { test: /FIRSTTIME\(21\)/, tag: '조교완료' },
+      { test: /FIRSTTIME\(22\)/, tag: '몹시 사랑함' },
+      { test: /FIRSTTIME\(23\)/, tag: '조교가 끝난 상태' },
+      { test: /FIRSTTIME\(24\)/, tag: '불구대천' },
+      { test: /FIRSTTIME\(25\)/, tag: '공포' },
+      { test: /FIRSTTIME\(26\)/, tag: '반발' },
+      { test: /FIRSTTIME\(27\)/, tag: '눈을 뜬다' },
+      { test: /FIRSTTIME\(28\)/, tag: '순응' },
+      { test: /FIRSTTIME\(29\)/, tag: '초반' }
+    ],
+    '14': [
+      { test: /CASE\s+6\b/, tag: '탈출직전 발견' },
+      { test: /CASE\s+5\b/, tag: '노예의 목걸이' },
+      { test: /CASE\s+4\b/, tag: '연모' },
+      { test: /CASE\s+3\b/, tag: '기다림' },
+      { test: /CASE\s+2\b/, tag: '붙잡힘' },
+      { test: /CASE\s+1\b/, tag: '탈출 실패' }
+    ],
+    '15': [
+      { test: /CASE\s+1\b/, tag: '방문' },
+      { test: /CASE\s+2\b/, tag: '야시장 처음' },
+      { test: /CASE\s+3\b/, tag: '야시장 재방문' },
+      { test: /CASE\s+4\b/, tag: '선물' },
+      { test: /CASE\s+5\b/, tag: '아무것도' },
+      { test: /CASE\s+6\b/, tag: '사과엿' },
+      { test: /CASE\s+7\b/, tag: '고기꼬치' },
+      { test: /CASE\s+8\b/, tag: '귀환' },
+      { test: /CASE\s+9\b/, tag: '밤 인사' }
+    ],
+    '16': [
+      { test: /TFLAG:77\s*==\s*0\b/, tag: '항상' },
+      { test: /TFLAG:77\s*==\s*1\b/, tag: 'A개발' },
+      { test: /TFLAG:77\s*==\s*2\b/, tag: '처벌' },
+      { test: /TFLAG:77\s*==\s*3\b/, tag: '격렬하게' },
+      { test: /TFLAG:77\s*==\s*4\b/, tag: '달콤하게' },
+      { test: /TFLAG:77\s*==\s*5\b/, tag: '부서질만큼' },
+      { test: /TFLAG:77\s*==\s*6\b/, tag: '외츨' },
+      { test: /TFLAG:77\s*==\s*7\b/, tag: '아이만들기' },
+      { test: /TFLAG:77\s*==\s*8\b/, tag: '휴식' },
+      { test: /TFLAG:77\s*==\s*9\b/, tag: '욕실' },
+      { test: /TFLAG:77\s*==\s*10\b/, tag: '처녀개발' },
+      { test: /TFLAG:77\s*==\s*11\b/, tag: '도구사용' },
+      { test: /TFLAG:77\s*==\s*12\b/, tag: '능욕' }
+    ],
+    '17': [
+      { test: /TFLAG:77\s*==\s*1\b/, tag: 'A개발' },
+      { test: /TFLAG:77\s*==\s*10\b/, tag: '처녀개발' },
+      { test: /TFLAG:77\s*==\s*11\b/, tag: '도구사용' }
+    ],
+    '18': [
+      { test: /FIRSTTIME\(16\)/, tag: '임신 발각' },
+      { test: /FIRSTTIME\(17\)/, tag: '만삭' },
+      { test: /FIRSTTIME\(18\)/, tag: '딸 출산' },
+      { test: /FIRSTTIME\(19\)/, tag: '아들 출산' }
+    ],
+    '102': [
+      { test: /IF\s+LOCAL:1\s*&&\s*ARG\s*==\s*1/, tag: '조교자 변경완료' }
+    ],
+    '21': [],
+    '24': []
+  };
+
+  /* 함수명에서 이벤트 행동번호 추출: KOJO_EVENT_K번호_행동번호 */
+  function getEventKey(funcName) {
+    const m = funcName.match(/^KOJO_EVENT_K\d+_(\d+)$/);
+    return m ? m[1] : null;
+  }
+
+  /* 조건 문자열 → 설명 태그 */
+  function getEventTags(funcName, condStr) {
+    if (!condStr) return [];
+    const key = getEventKey(funcName);
+    if (!key || !EVENT_TAG_MAP[key]) return [];
+
+    const tags = [];
+    const map = EVENT_TAG_MAP[key];
+    const parts = condStr.split('||').map(p => p.trim());
+
+    parts.forEach(part => {
+      map.forEach(rule => {
+        if (rule.test.test(part) && !tags.includes(rule.tag)) {
+          tags.push(rule.tag);
+        }
+      });
+    });
+
+    return [...new Set(tags)];
+  }
+
+  /* =========================================================
+     조건 태그를 기존 렌더된 DOM 에 주입
+     - .print-meta 내부의 .condition 스팬 텍스트를 읽어
+       해당 조건에 매칭되는 태그를 func-tags 로 추가
+     ========================================================= */
+  function injectEventTags() {
+    document.querySelectorAll('.func-group.ev').forEach(fg => {
+      const headerEl = fg.querySelector('.func-header');
+      if (!headerEl) return;
+      const funcName = headerEl.textContent.replace('@', '').trim().replace(/\s+\(.*$/, '');
+      if (!/^KOJO_EVENT_K\d+_\d+$/.test(funcName)) return;
+
+      fg.querySelectorAll('.print-meta').forEach(meta => {
+        // 이미 태그가 있으면 스킵
+        if (meta.querySelector('.func-tags')) return;
+
+        const condEl = meta.querySelector('.condition');
+        if (!condEl) return;
+        const condStr = condEl.textContent.trim();
+        if (!condStr) return;
+
+        const tags = getEventTags(funcName, condStr);
+        if (tags.length === 0) return;
+
+        const tagHtml = '<span class="func-tags">' +
+          tags.map(t => '<span class="func-tag">' + t + '</span>').join('') +
+          '</span>';
+
+        // branch/condition 을 감싸는 첫 번째 span 안에 태그 추가
+        const wrapSpan = meta.querySelector('span');
+        if (wrapSpan) {
+          wrapSpan.insertAdjacentHTML('beforeend', tagHtml);
+        }
+      });
+    });
+  }
+
+  /* =========================================================
+     [기타] 카테고리를 이벤트 전용 카테고리로 재구성
+     ========================================================= */
+  function restructureEventCategories() {
+    const editorArea = document.getElementById('editorArea');
+    if (!editorArea) return;
+
+    // js_edit.js 가 만든 .func-group.ev 들을 모두 수집
+    const allFuncGroups = Array.from(editorArea.querySelectorAll('.func-group.ev'));
+    if (allFuncGroups.length === 0) return;
+
+    // 각 함수 그룹을 이벤트 카테고리별로 분류
+    const buckets = {};
+    EVENT_CATEGORIES.forEach(cat => { buckets[cat.key] = []; });
+    const unassigned = [];
+
+    allFuncGroups.forEach(fg => {
+      const headerEl = fg.querySelector('.func-header');
+      if (!headerEl) { unassigned.push(fg); return; }
+      const funcName = headerEl.textContent.replace('@', '').trim();
+      const key = getEventKey(funcName);
+      if (!key || !buckets[key]) {
+        unassigned.push(fg);
+        return;
+      }
+      buckets[key].push(fg);
+    });
+
+    // 기존 카테고리 그룹 제거 (함수 그룹 DOM 노드는 detach 되어 재사용됨)
+    Array.from(editorArea.querySelectorAll('.category-group')).forEach(cg => cg.remove());
+
+    let grandTotalChars = 0;
+
+    // 새 카테고리 그룹 생성 (EVENT_CATEGORIES 순서 유지)
+    EVENT_CATEGORIES.forEach(cat => {
+      const funcs = buckets[cat.key];
+      if (!funcs || funcs.length === 0) return;
+
+      // 글자수 합산
+      let catChars = 0;
+      funcs.forEach(fg => {
+        fg.querySelectorAll('.char-count').forEach(el => {
+          const n = parseInt(el.textContent.replace(/[^\d]/g, ''), 10);
+          if (!isNaN(n)) catChars += n;
+        });
+      });
+      grandTotalChars += catChars;
+
+      const catGroup = document.createElement('div');
+      catGroup.className = 'category-group';
+      catGroup.id = 'cat_' + cat.key;
+
+      const header = document.createElement('div');
+      header.className = 'category-header';
+      header.setAttribute('onclick', 'toggleCategory(this)');
+      header.innerHTML =
+        '<span>' +
+          '<span class="cat-name">[' + cat.name + ']</span> ' +
+          '<span class="cat-count">(' + funcs.length + '개)</span>' +
+          '<span class="cat-chars">/ ' + catChars.toLocaleString() + ' 자</span>' +
+        '</span>' +
+        '<button class="category-toggle">[+] 펼치기</button>';
+
+      const content = document.createElement('div');
+      content.className = 'category-content';
+      funcs.forEach(fg => content.appendChild(fg));
+
+      catGroup.appendChild(header);
+      catGroup.appendChild(content);
+      editorArea.appendChild(catGroup);
+    });
+
+    // 분류되지 않은 함수 그룹은 [기타] 로 묶어서 뒤에 추가
+    if (unassigned.length > 0) {
+      let etcChars = 0;
+      unassigned.forEach(fg => {
+        fg.querySelectorAll('.char-count').forEach(el => {
+          const n = parseInt(el.textContent.replace(/[^\d]/g, ''), 10);
+          if (!isNaN(n)) etcChars += n;
+        });
+      });
+      grandTotalChars += etcChars;
+
+      const catGroup = document.createElement('div');
+      catGroup.className = 'category-group';
+      catGroup.id = 'cat_etc';
+
+      const header = document.createElement('div');
+      header.className = 'category-header';
+      header.setAttribute('onclick', 'toggleCategory(this)');
+      header.innerHTML =
+        '<span>' +
+          '<span class="cat-name">[기타]</span> ' +
+          '<span class="cat-count">(' + unassigned.length + '개)</span>' +
+          '<span class="cat-chars">/ ' + etcChars.toLocaleString() + ' 자</span>' +
+        '</span>' +
+        '<button class="category-toggle">[+] 펼치기</button>';
+
+      const content = document.createElement('div');
+      content.className = 'category-content';
+      unassigned.forEach(fg => content.appendChild(fg));
+
+      catGroup.appendChild(header);
+      catGroup.appendChild(content);
+      editorArea.appendChild(catGroup);
+    }
+
+    // 총 글자수 표시 갱신
+    const totalEl = document.getElementById('totalCharsDisplay');
+    if (totalEl) {
+      totalEl.textContent = '총 글자수 : ' + grandTotalChars.toLocaleString() + ' 자';
+    }
+  }
+
+  /* js_edit.js 가 렌더링을 마칠 때마다 재구성 + 태그 주입
+     - 파일 로드, 캐릭터 번호 변경, 내용 비우기 등에서 발생 */
+  document.addEventListener('erb:rendered', () => {
+    // 1) 조건 태그 주입 (카테고리 이동 전에 처리해도 무방)
+    injectEventTags();
+    // 2) 카테고리 재구성
+    restructureEventCategories();
+    // 3) textarea 자동 리사이즈
+    if (typeof window.autoResizeAll === 'function') {
+      setTimeout(window.autoResizeAll, 0);
+    } else {
+      document.querySelectorAll('.group-input').forEach(ta => {
+        ta.style.height = 'auto';
+        ta.style.height = ta.scrollHeight + 'px';
+      });
+    }
+  });
+
+  /* 이동 버튼 동작: js_edit.js 는 KOJO_TALK/KOJO_EVENT 둘 다 접미사 매칭하므로
+     이벤트 에디터에서는 그대로 사용 가능. 별도 오버라이드 불필요. */
+});
+</script>
+</body>
+</html>

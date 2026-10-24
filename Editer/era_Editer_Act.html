@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R 액션/리액션 구상 에디터</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<!-- era_Editer 정의 -->
+<body data-page="act">
+
+<div class="header">
+  <h1>✏️ Era R 액션/리액션 구상 에디터 [Act]</h1>
+  <input type="file" id="fileInput" accept=".erb,.txt">
+  <span style="font-size:12px; color:var(--muted);" id="fileStatus">액션 파일(KOJO_ACT_K.ERB)을 선택해 주세요.</span>
+  <nav class="header-nav">
+    <a href="era_Editer_Act.html"   data-nav="act" class="active">액션 편집기</a>
+    <a href="era_Editer_Event.html" data-nav="event">이벤트 편집기</a>
+    <a href="era_Editer_Talk.html"  data-nav="talk">대화 편집기</a>
+  </nav>
+</div>
+
+<div class="main-container">
+  <!-- 좌측 사이드바 (Str.html / Train.html iframe) -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-tabs">
+        <button id="btnTabStr" class="tab-btn active" type="button">조교 행동</button>
+        <button id="btnTabTrain" class="tab-btn" type="button">리액션/답변</button>
+      </div>
+    </div>
+    <iframe id="sidebarFrame" class="sidebar-frame" src="../side/side_Str.html"></iframe>
+    <div class="sidebar-fallback" id="strFallback" style="display:none;">
+      파일을 불러오지 못했습니다.<br>
+      같은 폴더에 <b>side_Str.html</b> 또는 <b>side_Train.html</b> 파일이 있는지 확인해 주세요.
+    </div>
+  </div>
+
+  <div class="editor-wrap" id="editorArea">
+    <div style="color:var(--muted); text-align:center; margin-top:50px;">
+      .erb 파일을 불러오면<br>여기에 수정할 텍스트 목록이 나타납니다.
+    </div>
+  </div>
+  
+  <div class="preview-wrap">
+    <div class="preview-header">
+      <span>출력 결과 프리뷰</span>
+      <span id="previewStatus" style="font-size:12px; color:var(--muted);">대기 중</span>
+    </div>
+    <pre class="preview-content" id="previewArea">(출력 버튼을 누르면 여기에 원본 코드가 표시됩니다.)</pre>
+  </div>
+</div>
+
+<div class="toolbar">
+  <span id="totalCharsDisplay" class="total-chars">총 글자수 : 0 자</span>
+  
+  <button id="btnCollapseAll" type="button">전부 접기</button>
+  <button id="btnExpandAll" type="button">전부 펼치기</button>
+  <input type="text" id="findIdInput" class="find-input" placeholder="행동번호" autocomplete="off">
+  <button id="btnFind">이동</button>
+  
+  <input type="text" id="charNumInput" class="find-input-char" placeholder="K번호" autocomplete="off">
+  <button id="btnChangeCharNum" type="button">캐릭터 번호 변경</button>
+
+  <button id="btnOutput" class="primary">출력</button>
+  <button id="btnSave">.ERB 저장</button>
+  <button id="btnCopy">복사</button>
+  
+  <div class="spacer"></div>
+  <button id="btnClearContent" type="button" class="delete">내용 비우기</button>
+  <button id="btnClear">초기화</button>
+</div>
+
+<!-- 공통 편집기 로직 -->
+<script src="js_edit.js"></script>
+<!-- 액션/리액션 전용 스크립트 -->
+<script>
+/* =========================================================
+   액션/리액션(Act) 에디터 전용 스크립트
+   - js_edit.js 가 렌더링을 마치면 'erb:rendered' 이벤트를 발생시킴
+   - 이 이벤트를 받아 [기타] 카테고리를 액션 카테고리로 재구성
+   - KOJO_ACT/KOJO_REACT 클래스 적용 + 조건 태그 후처리 주입
+   - 캐릭터 번호 변경 / 이동 버튼을 액션용으로 오버라이드
+   - 사이드바 iframe 탭 전환 초기화
+   ========================================================= */
+(function () {
+  'use strict';
+
+  /* 액션 카테고리 (행동번호 범위 기준) */
+  const CATEGORIES = [
+    { name: '회화', min: 0, max: 9 },
+    { name: '애무', min: 10, max: 19 },
+    { name: '도구', min: 20, max: 28 },
+    { name: '성교', min: 30, max: 39 },
+    { name: '수치심', min: 40, max: 48 },
+    { name: '봉사', min: 50, max: 58 },
+    { name: '가학', min: 60, max: 69 },
+    { name: '이상', min: 70, max: 78 },
+    { name: '휴식', min: 90, max: 110 }
+  ];
+
+  const SELECTCOM_MAP = {
+    0: '침묵한다', 1: '소심하게 대답', 2: '무뚝뚝하게 대답', 3: '붙임성있게 대답',
+    4: '단호하게 대답', 5: '빈정거림', 6: '더 하드하게', 7: '용서를 빈다',
+    8: '기분 좋게 해줘', 11: '싫어한다', 13: '비웃는다', 30: '참는다',
+    32: '난동부림', 33: '몸을 떤다'
+  };
+
+  /* 함수명에서 카테고리 이름 추출 */
+  function getCategoryKey(funcName) {
+    const match = funcName.match(/_(\d+)$/);
+    if (!match) return '기타';
+    const num = parseInt(match[1], 10);
+    for (const cat of CATEGORIES) {
+      if (num >= cat.min && num <= cat.max) return cat.name;
+    }
+    return '기타';
+  }
+
+  /* 조건 문자열 → 설명 태그 */
+  function getConditionTags(condStr) {
+    if (!condStr) return [];
+    const tags = [];
+    const parts = condStr.split('||').map(p => p.trim());
+
+    parts.forEach(part => {
+      if (/FIRSTTIME\(\d+\)/.test(part)) tags.push('최초 발생');
+      if (/TFLAG:105\s*==\s*1/.test(part)) tags.push('질내사정 직후');
+      if (/TFLAG:64\s*==\s*1/.test(part)) tags.push('이번 조교 중 처음');
+      const favorMatch = part.match(/FAVOR\((\d+)\)/);
+      if (favorMatch) tags.push('호감도 ' + favorMatch[1] + ' 이상');
+      const selectMatch = part.match(/SELECTCOM\s*==\s*(\d+)/);
+      if (selectMatch) {
+        const num = parseInt(selectMatch[1], 10);
+        if (SELECTCOM_MAP[num]) tags.push(SELECTCOM_MAP[num]);
+      }
+      if (/TALENT:MASTER:0\b/.test(part) && !/TALENT:MASTER:0\s*==/.test(part)) tags.push('처녀');
+      if (/TALENT:1\b/.test(part) && !/TALENT:1\s*==/.test(part)) tags.push('동정');
+      if (/PALAM:40\b/.test(part) && !/PALAM:40\s*==/.test(part)) tags.push('사정감');
+      if (/TEQUIP:70\b/.test(part) && !/TEQUIP:70\s*==/.test(part)) tags.push('성교중');
+      if (/TFLAG:64\b/.test(part) && !/TFLAG:64\s*==/.test(part)) tags.push('경과시간');
+      if (/TFLAG:69\b/.test(part) && !/TFLAG:69\s*==/.test(part)) tags.push('처벌 모드');
+      if (/TFLAG:90\b/.test(part) && !/TFLAG:90\s*==/.test(part)) tags.push('이전 조교명령 반영');
+      if (/!TFLAG:93\b/.test(part)) tags.push('도구 장착/무사함');
+
+      const tflag93Match = part.match(/TFLAG:93\s*==\s*(\d+)/);
+      if (tflag93Match) {
+        const n = parseInt(tflag93Match[1], 10);
+        if (n === 1) tags.push('도구 해제/애원/강하게 맞선다');
+        else if (n === 2) tags.push('능욕/빈정거림');
+        else if (n === 3) tags.push('음란/분명하게 말한다');
+        else if (n === 0) tags.push('모호하게 대답');
+      }
+
+      const tflag94Match = part.match(/TFLAG:94\s*==\s*(\d+)/);
+      if (tflag94Match) {
+        const n = parseInt(tflag94Match[1], 10);
+        if (n === 1) tags.push('소극적 따름');
+        else if (n === 2) tags.push('적극적 따름');
+        else if (n === 5) tags.push('거부한다');
+      }
+    });
+
+    return tags;
+  }
+
+  /* =========================================================
+     조건 태그 + act/react 클래스를 기존 렌더된 DOM 에 주입
+     ========================================================= */
+  function injectActClassesAndTags() {
+    document.querySelectorAll('.func-group').forEach(fg => {
+      const headerEl = fg.querySelector('.func-header');
+      if (!headerEl) return;
+      const funcName = headerEl.textContent.replace('@', '').trim();
+
+      // act / react 클래스 적용 (js_edit.js 는 ev 클래스만 부여)
+      if (funcName.startsWith('KOJO_ACT')) {
+        fg.classList.remove('ev');
+        fg.classList.add('act');
+      } else if (funcName.startsWith('KOJO_REACT')) {
+        fg.classList.remove('ev');
+        fg.classList.add('react');
+      }
+
+      if (!/^KOJO_(ACT|REACT)_K\d+_\d+$/.test(funcName)) return;
+
+      fg.querySelectorAll('.print-meta').forEach(meta => {
+        if (meta.querySelector('.func-tags')) return;
+        const condEl = meta.querySelector('.condition');
+        if (!condEl) return;
+        const condStr = condEl.textContent.trim();
+        if (!condStr) return;
+
+        const tags = getConditionTags(condStr);
+        if (tags.length === 0) return;
+
+        const tagHtml = '<span class="func-tags">' +
+          tags.map(t => '<span class="func-tag">' + t + '</span>').join('') +
+          '</span>';
+
+        const wrapSpan = meta.querySelector('span');
+        if (wrapSpan) wrapSpan.insertAdjacentHTML('beforeend', tagHtml);
+      });
+    });
+  }
+
+  /* =========================================================
+     [기타] 카테고리를 액션 카테고리로 재구성
+     ========================================================= */
+  function restructureActCategories() {
+    const editorArea = document.getElementById('editorArea');
+    if (!editorArea) return;
+
+    const allFuncGroups = Array.from(editorArea.querySelectorAll('.func-group'));
+    if (allFuncGroups.length === 0) return;
+
+    const buckets = {};
+    CATEGORIES.forEach(cat => { buckets[cat.name] = []; });
+    const unassigned = [];
+
+    allFuncGroups.forEach(fg => {
+      const headerEl = fg.querySelector('.func-header');
+      if (!headerEl) { unassigned.push(fg); return; }
+      const funcName = headerEl.textContent.replace('@', '').trim();
+
+      // 액션/리액션 함수만 대상
+      if (!/^KOJO_(ACT|REACT)_K\d+_\d+$/.test(funcName)) {
+        unassigned.push(fg);
+        return;
+      }
+      const catKey = getCategoryKey(funcName);
+      if (buckets[catKey]) buckets[catKey].push(fg);
+      else unassigned.push(fg);
+    });
+
+    // 기존 카테고리 그룹 제거 (함수 그룹 DOM 노드는 detach 되어 재사용됨)
+    Array.from(editorArea.querySelectorAll('.category-group')).forEach(cg => cg.remove());
+
+    let grandTotalChars = 0;
+
+    // 새 카테고리 그룹 생성 (CATEGORIES 순서 유지)
+    CATEGORIES.forEach(cat => {
+      const funcs = buckets[cat.name];
+      if (!funcs || funcs.length === 0) return;
+
+      let catChars = 0;
+      funcs.forEach(fg => {
+        fg.querySelectorAll('.char-count').forEach(el => {
+          const n = parseInt(el.textContent.replace(/[^\d]/g, ''), 10);
+          if (!isNaN(n)) catChars += n;
+        });
+      });
+      grandTotalChars += catChars;
+
+      const catGroup = document.createElement('div');
+      catGroup.className = 'category-group';
+      catGroup.id = 'cat_' + cat.name;
+
+      const header = document.createElement('div');
+      header.className = 'category-header';
+      header.setAttribute('onclick', 'toggleCategory(this)');
+      header.innerHTML =
+        '<span>' +
+          '<span class="cat-name">[' + cat.name + ']</span> (' + cat.min + '~' + cat.max + ') ' +
+          '<span class="cat-count">(' + funcs.length + '개)</span>' +
+          '<span class="cat-chars">/ ' + catChars.toLocaleString() + ' 자</span>' +
+        '</span>' +
+        '<button class="category-toggle">[+] 펼치기</button>';
+
+      const content = document.createElement('div');
+      content.className = 'category-content';
+      funcs.forEach(fg => content.appendChild(fg));
+
+      catGroup.appendChild(header);
+      catGroup.appendChild(content);
+      editorArea.appendChild(catGroup);
+    });
+
+    // 분류되지 않은 함수 그룹은 [기타] 로 묶어서 뒤에 추가
+    if (unassigned.length > 0) {
+      let etcChars = 0;
+      unassigned.forEach(fg => {
+        fg.querySelectorAll('.char-count').forEach(el => {
+          const n = parseInt(el.textContent.replace(/[^\d]/g, ''), 10);
+          if (!isNaN(n)) etcChars += n;
+        });
+      });
+      grandTotalChars += etcChars;
+
+      const catGroup = document.createElement('div');
+      catGroup.className = 'category-group';
+      catGroup.id = 'cat_etc';
+
+      const header = document.createElement('div');
+      header.className = 'category-header';
+      header.setAttribute('onclick', 'toggleCategory(this)');
+      header.innerHTML =
+        '<span>' +
+          '<span class="cat-name">[기타]</span> ' +
+          '<span class="cat-count">(' + unassigned.length + '개)</span>' +
+          '<span class="cat-chars">/ ' + etcChars.toLocaleString() + ' 자</span>' +
+        '</span>' +
+        '<button class="category-toggle">[+] 펼치기</button>';
+
+      const content = document.createElement('div');
+      content.className = 'category-content';
+      unassigned.forEach(fg => content.appendChild(fg));
+
+      catGroup.appendChild(header);
+      catGroup.appendChild(content);
+      editorArea.appendChild(catGroup);
+    }
+
+    const totalEl = document.getElementById('totalCharsDisplay');
+    if (totalEl) {
+      totalEl.textContent = '총 글자수 : ' + grandTotalChars.toLocaleString() + ' 자';
+    }
+  }
+
+  /* js_edit.js 가 렌더링을 마칠 때마다 재구성 + 태그/클래스 주입 */
+  document.addEventListener('erb:rendered', () => {
+    injectActClassesAndTags();
+    restructureActCategories();
+    document.querySelectorAll('.group-input').forEach(ta => {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    });
+  });
+
+  /* =========================================================
+     캐릭터 번호 변경 버튼 오버라이드 (KOJO_ACT/REACT 대응)
+     - js_edit.js 의 기존 리스너를 제거하기 위해 cloneNode 로 교체
+     ========================================================= */
+  function overrideChangeCharNum() {
+    const oldBtn = document.getElementById('btnChangeCharNum');
+    if (!oldBtn) return;
+    const btn = oldBtn.cloneNode(true);
+    oldBtn.parentNode.replaceChild(btn, oldBtn);
+
+    btn.addEventListener('click', () => {
+      // js_edit.js 는 originalLines 를 클로저 내부에 보관하므로 외부에서 직접 수정 불가.
+      // 대신 DOM 에서 현재 textarea 값과 원본 코드 라인 정보를 이용하지 않고,
+      // "출력"을 거치지 않고 함수명만 변경하는 방식은 불가능하므로,
+      // 파일을 다시 읽지 않고는 원본 라인에 접근할 수 없다.
+      // → 여기서는 사용자에게 안내 후, 파일 input 을 통해 재로드하도록 유도하지 않고
+      //   함수명 변경은 "출력" 전 원본 라인 기준이므로, 
+      //   간단히 경고 후 js_edit.js 의 기본 동작을 그대로 수행하도록 안내한다.
+      alert('액션 에디터의 캐릭터 번호 변경은 js_edit.js 기본 동작(KOJO_TALK/EVENT)만 지원합니다.\n' +
+            '액션 파일의 KOJO_ACT_K* / KOJO_REACT_K* 번호를 바꾸려면 텍스트 편집기에서 직접 변경해 주세요.');
+    });
+  }
+
+  /* =========================================================
+     이동 버튼 오버라이드 (KOJO_ACT/REACT 접미사 매칭)
+     - 기존 리스너 제거를 위해 cloneNode 로 교체
+     ========================================================= */
+  function overrideFind() {
+    const oldBtn = document.getElementById('btnFind');
+    if (!oldBtn) return;
+    const btn = oldBtn.cloneNode(true);
+    oldBtn.parentNode.replaceChild(btn, oldBtn);
+
+    function findAndScroll() {
+      const input = document.getElementById('findIdInput');
+      const targetId = input.value.trim();
+      if (!targetId) {
+        alert('행동번호를 입력해 주세요.');
+        return;
+      }
+
+      const allGroups = document.querySelectorAll('.func-group');
+      let found = null;
+
+      for (const group of allGroups) {
+        const header = group.querySelector('.func-header');
+        if (!header) continue;
+        const funcName = header.textContent.replace('@', '').trim();
+
+        if (/^KOJO_(ACT|REACT)_K\d+_\d+$/.test(funcName) && funcName.endsWith('_' + targetId)) {
+          found = group;
+          break;
+        }
+      }
+
+      if (found) {
+        const categoryGroup = found.closest('.category-group');
+        if (categoryGroup) {
+          const content = categoryGroup.querySelector('.category-content');
+          const catBtn = categoryGroup.querySelector('.category-toggle');
+          if (content && !content.classList.contains('open')) {
+            content.classList.add('open');
+            catBtn.textContent = '[-] 접기';
+          }
+        }
+
+        const collapsedParent = found.closest('.collapsed-content');
+        if (collapsedParent && !collapsedParent.classList.contains('open')) {
+          collapsedParent.classList.add('open');
+          const toggleBtn = collapsedParent.previousElementSibling.querySelector('.toggle-btn');
+          if (toggleBtn) toggleBtn.textContent = '[-]';
+        }
+
+        setTimeout(() => {
+          found.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          found.classList.add('highlight');
+          setTimeout(() => found.classList.remove('highlight'), 2000);
+          document.querySelectorAll('.group-input').forEach(ta => {
+            ta.style.height = 'auto';
+            ta.style.height = ta.scrollHeight + 'px';
+          });
+        }, 100);
+      } else {
+        alert('해당 번호(' + targetId + ')의 액션 블록을 찾을 수 없습니다.');
+      }
+    }
+
+    btn.addEventListener('click', findAndScroll);
+    const findInput = document.getElementById('findIdInput');
+    if (findInput) {
+      // 기존 keydown 리스너도 제거하기 위해 cloneNode 로 교체
+      const newInput = findInput.cloneNode(true);
+      findInput.parentNode.replaceChild(newInput, findInput);
+      newInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') findAndScroll();
+      });
+    }
+  }
+
+  /* DOM 준비 후 오버라이드 실행
+     - js_edit.js 는 DOMContentLoaded 에서 리스너를 등록하므로,
+       그 이후에 실행되도록 DOMContentLoaded + setTimeout(0) 사용 */
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      overrideChangeCharNum();
+      overrideFind();
+    }, 0);
+  });
+
+  /* =========================================================
+     사이드바 iframe 로드 및 탭 전환
+     ========================================================= */
+  document.addEventListener('DOMContentLoaded', () => {
+    const sidebarFrame = document.getElementById('sidebarFrame');
+    const strFallback = document.getElementById('strFallback');
+    const btnTabStr = document.getElementById('btnTabStr');
+    const btnTabTrain = document.getElementById('btnTabTrain');
+
+    if (!sidebarFrame || !btnTabStr || !btnTabTrain) return;
+
+    function loadSidebarPage(pageName) {
+      sidebarFrame.src = pageName + '?t=' + Date.now();
+      if (pageName === 'side_Str.html') {
+        btnTabStr.classList.add('active');
+        btnTabTrain.classList.remove('active');
+      } else {
+        btnTabTrain.classList.add('active');
+        btnTabStr.classList.remove('active');
+      }
+    }
+
+    sidebarFrame.addEventListener('load', () => {
+      if (strFallback) strFallback.style.display = 'none';
+    });
+
+    sidebarFrame.addEventListener('error', () => {
+      if (strFallback) strFallback.style.display = 'block';
+    });
+
+    btnTabStr.addEventListener('click', () => loadSidebarPage('side_Str.html'));
+    btnTabTrain.addEventListener('click', () => loadSidebarPage('side_Train.html'));
+  });
+
+  /* 헤더 네비게이션 초기화 (EraCommon 이 존재하는 경우에만) */
+  if (window.EraCommon && typeof window.EraCommon.initHeaderNav === 'function') {
+    window.EraCommon.initHeaderNav('act');
+  }
+})();
+</script>
+</body>
+</html>
