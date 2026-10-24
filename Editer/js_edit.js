@@ -25,10 +25,35 @@ document.addEventListener('DOMContentLoaded', () => {
   const FUNC_REGEX = /^\s*@([A-Za-z0-9_]+)/;
   const IF_REGEX = /^\s*(IF|ELSEIF|ELSE|ENDIF|SELECTCASE|CASE|CASEELSE|ENDSELECT)\b(.*)$/;
 
-  // 캐릭터 번호(K번호)를 포함하는 함수 접두사 패턴
-  // KOJO_TALK_K*, KOJO_EVENT_K*, KOJO_ACT_K*, KOJO_REACT_K* 모두 대응
-  const KOJO_FUNC_PREFIX_REGEX = /^KOJO_(?:TALK|EVENT|ACT|REACT)_K(\d+)_/;
-  const KOJO_CHAR_REPLACE_REGEX = /\bKOJO_(TALK|EVENT|ACT|REACT)_K\d+_/g;
+/* =========================================================
+   캐릭터 번호(K번호) 추출/치환 정규식
+   - EVENT/ACT/REACT 형식: KOJO_EVENT_K<캐릭터번호>_<번호>
+                          KOJO_ACT_K<캐릭터번호>_<번호>
+                          KOJO_REACT_K<캐릭터번호>_<번호>
+     → K 뒤의 숫자가 캐릭터 번호
+   - TALK 형식:           KOJO_TALK<대화번호>_K<캐릭터번호>
+     → K 뒤(끝)의 숫자가 캐릭터 번호
+   ========================================================= */
+
+// 함수명에서 캐릭터 번호 추출 (두 형식 모두 대응)
+const KOJO_CHAR_NUM_REGEXES = [
+  /^KOJO_(?:EVENT|ACT|REACT)_K(\d+)_/,   // KOJO_EVENT_K12_11
+  /^KOJO_TALK\d+_K(\d+)$/                // KOJO_TALK31_K12
+];
+
+// 원본 라인에서 캐릭터 번호만 교체 (두 형식 모두 대응)
+// - EVENT/ACT/REACT: KOJO_XXX_K<캐릭터번호>_  → KOJO_XXX_K<newK>_
+// - TALK:            KOJO_TALK<번호>_K<캐릭터번호> → KOJO_TALK<번호>_K<newK>
+const KOJO_CHAR_REPLACE_RULES = [
+  {
+    regex: /\bKOJO_(EVENT|ACT|REACT)_K\d+_/g,
+    replace: (match, type, newK) => 'KOJO_' + type + '_K' + newK + '_'
+  },
+  {
+    regex: /\bKOJO_(TALK\d+)_K\d+/g,
+    replace: (match, talkNum, newK) => 'KOJO_' + talkNum + '_K' + newK
+  }
+];
 
   /* =========================================================
      파일 로드
@@ -53,12 +78,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const charNumInput = document.getElementById('charNumInput');
       if (renderGroups.length > 0) {
         const firstName = renderGroups[0].name;
-        const match = firstName.match(KOJO_FUNC_PREFIX_REGEX);
-        if (match) {
-          charNumInput.value = match[1];
-        } else {
-          charNumInput.value = '';
-        }
+        const charNumInput = document.getElementById('charNumInput');
+if (renderGroups.length > 0) {
+  const firstName = renderGroups[0].name;
+  let found = '';
+  for (const re of KOJO_CHAR_NUM_REGEXES) {
+    const m = firstName.match(re);
+    if (m) { found = m[1]; break; }
+  }
+  charNumInput.value = found;
+} else {
+  charNumInput.value = '';
+}
       } else {
         charNumInput.value = '';
       }
@@ -486,11 +517,27 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!header) continue;
       const funcName = header.textContent.replace('@', '').trim();
 
-      // KOJO_TALK*/KOJO_EVENT*/KOJO_ACT*/KOJO_REACT* 함수명에서 접미사 _<targetId> 매칭
-      if (/^KOJO_(TALK|EVENT|ACT|REACT)_K\d+_\d+$/.test(funcName) && funcName.endsWith('_' + targetId)) {
-        found = group;
-        break;
-      }
+// EVENT/ACT/REACT: KOJO_XXX_K<캐릭터번호>_<번호> → 접미사 _<번호>
+// TALK:            KOJO_TALK<대화번호>_K<캐릭터번호> → KOJO_TALK<대화번호> 매칭
+let isMatch = false;
+
+// EVENT/ACT/REACT
+if (/^KOJO_(EVENT|ACT|REACT)_K\d+_\d+$/.test(funcName) && funcName.endsWith('_' + targetId)) {
+  isMatch = true;
+}
+
+// TALK: 입력값이 대화번호와 일치하는지 확인
+if (!isMatch) {
+  const talkMatch = funcName.match(/^KOJO_TALK(\d+)_K\d+$/);
+  if (talkMatch && talkMatch[1] === targetId) {
+    isMatch = true;
+  }
+}
+
+if (isMatch) {
+  found = group;
+  break;
+}
     }
 
     if (found) {
@@ -563,10 +610,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     originalLines = originalLines.map(line => {
-      return line.replace(KOJO_CHAR_REPLACE_REGEX, (match, type) => {
-        return 'KOJO_' + type + '_K' + newK + '_';
-      });
+  let result = line;
+  KOJO_CHAR_REPLACE_RULES.forEach(rule => {
+    result = result.replace(rule.regex, (match, group1) => {
+      return rule.replace(match, group1, newK);
     });
+  });
+  return result;
+});
 
     parseAndGroup();
     renderEditor();
