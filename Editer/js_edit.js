@@ -748,9 +748,6 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('저장 중 오류가 발생했습니다: ' + err.message);
       }
     } else {
-      savedFiles.push(finalName);
-      try { localStorage.setItem(SAVED_FILES_KEY, JSON.stringify(savedFiles)); } catch (e) {}
-
       const blob = new Blob(['\uFEFF' + text], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
