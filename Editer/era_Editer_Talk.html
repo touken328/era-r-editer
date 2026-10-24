@@ -162,19 +162,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // 기존 카테고리 그룹 제거 (함수 그룹 DOM 노드는 detach 되어 재사용됨)
     Array.from(editorArea.querySelectorAll('.category-group')).forEach(cg => cg.remove());
 
+    let grandTotalChars = 0;
+
     // 새 카테고리 그룹 생성
     TALK_CATEGORIES.forEach(cat => {
       const funcs = buckets[cat.key];
       if (!funcs || funcs.length === 0) return;
 
-      // 글자수 합산
+      // ★ [수정된 부분] 글자수 합산 방식 변경
       let catChars = 0;
       funcs.forEach(fg => {
+        // 1) .char-count 엘리먼트가 있으면 그 값을 사용
+        let foundCount = false;
         fg.querySelectorAll('.char-count').forEach(el => {
           const n = parseInt(el.textContent.replace(/[^\d]/g, ''), 10);
-          if (!isNaN(n)) catChars += n;
+          if (!isNaN(n)) {
+            catChars += n;
+            foundCount = true;
+          }
         });
+
+        // 2) 만약 .char-count 엘리먼트가 없거나 0이라면, textarea 값을 직접 계산
+        if (!foundCount) {
+          fg.querySelectorAll('textarea.group-input').forEach(ta => {
+             // textarea의 값(줄바꿈 포함) 중 빈 줄을 제외한 순수 글자수 계산
+             const val = ta.value.replace(/\n/g, ''); 
+             catChars += val.length;
+          });
+        }
       });
+      grandTotalChars += catChars;
 
       const catGroup = document.createElement('div');
       catGroup.className = 'category-group';
@@ -215,6 +232,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 분류되지 않은 함수 그룹은 [기타] 로 묶어서 뒤에 추가
     if (unassigned.length > 0) {
+      let etcChars = 0;
+      unassigned.forEach(fg => {
+        fg.querySelectorAll('.char-count').forEach(el => {
+          const n = parseInt(el.textContent.replace(/[^\d]/g, ''), 10);
+          if (!isNaN(n)) etcChars += n;
+        });
+      });
+      grandTotalChars += etcChars;
+
       const catGroup = document.createElement('div');
       catGroup.className = 'category-group';
       catGroup.id = 'cat_etc';
@@ -226,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '<span>' +
           '<span class="cat-name">[기타]</span> ' +
           '<span class="cat-count">(' + unassigned.length + '개)</span>' +
-          '<span class="cat-chars">/ 0 자</span>' +
+          '<span class="cat-chars">/ ' + etcChars.toLocaleString() + ' 자</span>' +
         '</span>' +
         '<button class="category-toggle">[+] 펼치기</button>';
 
@@ -238,13 +264,24 @@ document.addEventListener('DOMContentLoaded', () => {
       catGroup.appendChild(content);
       editorArea.appendChild(catGroup);
     }
+
+    // 총 글자수 표시 갱신
+    const totalEl = document.getElementById('totalCharsDisplay');
+    if (totalEl) {
+      totalEl.textContent = '총 글자수 : ' + grandTotalChars.toLocaleString() + ' 자';
+    }
   }
 
-  /* js_edit.js 가 렌더링을 마칠 때마다 재구성 실행
-     - 파일 로드, 캐릭터 번호 변경, 내용 비우기 등에서 발생 */
   document.addEventListener('erb:rendered', () => {
-    // 동기 렌더링 직후 실행 (js_edit.js 가 innerHTML 을 이미 교체한 상태)
     restructureTalkCategories();
+    if (typeof window.autoResizeAll === 'function') {
+      setTimeout(window.autoResizeAll, 0);
+    } else {
+      document.querySelectorAll('.group-input').forEach(ta => {
+        ta.style.height = 'auto';
+        ta.style.height = ta.scrollHeight + 'px';
+      });
+    }
   });
 });
 </script>
