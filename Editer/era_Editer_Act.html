@@ -75,20 +75,17 @@
 
 <!-- 공통 편집기 로직 -->
 <script src="js_edit.js"></script>
-<!-- 액션/리액션 전용 스크립트 -->
+<!-- 액션/리액션/범용답변 전용 스크립트 -->
 <script>
 /* =========================================================
-   액션/리액션(Act) 에디터 전용 스크립트
-   - js_edit.js 가 렌더링을 마치면 'erb:rendered' 이벤트를 발생시킴
-   - 이 이벤트를 받아 [기타] 카테고리를 액션 카테고리로 재구성
-   - KOJO_ACT/KOJO_REACT 클래스 적용 + 조건 태그 후처리 주입
-   - 캐릭터 번호 변경 / 이동 버튼을 액션용으로 오버라이드
-   - 사이드바 iframe 탭 전환 초기화
+   액션/리액션/범용답변(Act/React/Com) 에디터 전용 스크립트
+   - KOJO_ACT, KOJO_REACT, KOJO_COM 파일 모두 대응
+   - 행동번호 범위에 따른 카테고리 자동 분류
    ========================================================= */
 (function () {
   'use strict';
 
-  /* 액션 카테고리 (행동번호 범위 기준) */
+  /* 액션/답변 카테고리 (행동번호 범위 기준) */
   const CATEGORIES = [
     { name: '회화', min: 0, max: 9 },
     { name: '애무', min: 10, max: 19 },
@@ -108,7 +105,7 @@
     32: '난동부림', 33: '몸을 떤다'
   };
 
-  /* 함수명에서 카테고리 이름 추출 */
+  /* 함수명에서 카테고리 이름 추출 (COM, ACT, REACT 공통 대응) */
   function getCategoryKey(funcName) {
     const match = funcName.match(/_(\d+)$/);
     if (!match) return '기타';
@@ -167,7 +164,7 @@
   }
 
   /* =========================================================
-     조건 태그 + act/react 클래스를 기존 렌더된 DOM 에 주입
+     조건 태그 + 클래스(act/react/com)를 기존 렌더된 DOM 에 주입
      ========================================================= */
   function injectActClassesAndTags() {
     document.querySelectorAll('.func-group').forEach(fg => {
@@ -175,7 +172,6 @@
       if (!headerEl) return;
       const funcName = headerEl.textContent.replace('@', '').trim();
 
-      // act / react 클래스 적용 (js_edit.js 는 ev 클래스만 부여)
       if (funcName.startsWith('KOJO_ACT')) {
         fg.classList.remove('ev');
         fg.classList.add('act');
@@ -187,7 +183,7 @@
         fg.classList.add('com');
       }
 
-      if (!/^KOJO_(ACT|REACT|COM)_K\d+_\d+$/.test(funcName)) return;
+      if (!/^KOJO_(ACT|REACT|COM)/.test(funcName)) return;
 
       fg.querySelectorAll('.print-meta').forEach(meta => {
         if (meta.querySelector('.func-tags')) return;
@@ -210,7 +206,7 @@
   }
 
   /* =========================================================
-     [기타] 카테고리를 액션 카테고리로 재구성
+     행동번호 범주별 카테고리 재구성 (COM 파일 완벽 대응)
      ========================================================= */
   function restructureActCategories() {
     const editorArea = document.getElementById('editorArea');
@@ -228,8 +224,8 @@
       if (!headerEl) { unassigned.push(fg); return; }
       const funcName = headerEl.textContent.replace('@', '').trim();
 
-      // 액션/리액션 함수만 대상
-      if (!/^KOJO_(ACT|REACT|COM)_K\d+_\d+$/.test(funcName)) {
+      // KOJO_ACT, KOJO_REACT, KOJO_COM 모두 카테고리 분류 대상으로 허용
+      if (!/^KOJO_(ACT|REACT|COM)/.test(funcName)) {
         unassigned.push(fg);
         return;
       }
@@ -238,12 +234,10 @@
       else unassigned.push(fg);
     });
 
-    // 기존 카테고리 그룹 제거 (함수 그룹 DOM 노드는 detach 되어 재사용됨)
     Array.from(editorArea.querySelectorAll('.category-group')).forEach(cg => cg.remove());
 
     let grandTotalChars = 0;
 
-    // 새 카테고리 그룹 생성 (CATEGORIES 순서 유지)
     CATEGORIES.forEach(cat => {
       const funcs = buckets[cat.name];
       if (!funcs || funcs.length === 0) return;
@@ -281,7 +275,6 @@
       editorArea.appendChild(catGroup);
     });
 
-    // 분류되지 않은 함수 그룹은 [기타] 로 묶어서 뒤에 추가
     if (unassigned.length > 0) {
       let etcChars = 0;
       unassigned.forEach(fg => {
@@ -322,7 +315,6 @@
     }
   }
 
-  /* js_edit.js 가 렌더링을 마칠 때마다 재구성 + 태그/클래스 주입 */
   document.addEventListener('erb:rendered', () => {
     injectActClassesAndTags();
     restructureActCategories();
@@ -333,19 +325,7 @@
   });
 
   /* =========================================================
-     캐릭터 번호 변경 버튼 오버라이드 (KOJO_ACT/REACT 대응)
-     - js_edit.js 의 기존 리스너를 제거하기 위해 cloneNode 로 교체
-     ========================================================= */
-  // js_edit.js 에서 이미 모든 KOJO_* 형식에 대한 변경 로직을 처리하므로,
-  // 이 페이지에서의 오버라이드는 제거합니다.
-  function overrideChangeCharNum() {
-    // js_edit.js 에서 모든 KOJO_* 형식(ACT, REACT, COM 포함)에 대한 변경 로직을 처리하므로,
-    // 이 페이지에서의 오버라이드는 제거합니다.
-  }
-
-  /* =========================================================
-     이동 버튼 오버라이드 (KOJO_ACT/REACT 접미사 매칭)
-     - 기존 리스너 제거를 위해 cloneNode 로 교체
+     이동 버튼 오버라이드 (COM 포함 매칭)
      ========================================================= */
   function overrideFind() {
     const oldBtn = document.getElementById('btnFind');
@@ -403,14 +383,13 @@
           });
         }, 100);
       } else {
-        alert('해당 번호(' + targetId + ')의 액션 블록을 찾을 수 없습니다.');
+        alert('해당 번호(' + targetId + ')의 블록을 찾을 수 없습니다.');
       }
     }
 
     btn.addEventListener('click', findAndScroll);
     const findInput = document.getElementById('findIdInput');
     if (findInput) {
-      // 기존 keydown 리스너도 제거하기 위해 cloneNode 로 교체
       const newInput = findInput.cloneNode(true);
       findInput.parentNode.replaceChild(newInput, findInput);
       newInput.addEventListener('keydown', (e) => {
@@ -419,19 +398,13 @@
     }
   }
 
-  /* DOM 준비 후 오버라이드 실행
-     - js_edit.js 는 DOMContentLoaded 에서 리스너를 등록하므로,
-       그 이후에 실행되도록 DOMContentLoaded + setTimeout(0) 사용 */
   document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
-      overrideChangeCharNum();
       overrideFind();
     }, 0);
   });
 
-  /* =========================================================
-     사이드바 iframe 로드 및 탭 전환
-     ========================================================= */
+  /* 사이드바 iframe 로드 및 탭 전환 */
   document.addEventListener('DOMContentLoaded', () => {
     const sidebarFrame = document.getElementById('sidebarFrame');
     const strFallback = document.getElementById('strFallback');
@@ -463,7 +436,6 @@
     btnTabTrain.addEventListener('click', () => loadSidebarPage('../side/side_Train.html'));
   });
 
-  /* 헤더 네비게이션 초기화 (EraCommon 이 존재하는 경우에만) */
   if (window.EraCommon && typeof window.EraCommon.initHeaderNav === 'function') {
     window.EraCommon.initHeaderNav('act');
   }

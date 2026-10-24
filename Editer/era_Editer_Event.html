@@ -12,7 +12,7 @@
 <div class="header">
   <h1>✏️ Era R 이벤트 구상 에디터 [Event]</h1>
   <input type="file" id="fileInput" accept=".erb,.txt">
-  <span style="font-size:12px; color:var(--muted);" id="fileStatus">이벤트 파일(KOJO_EVENT_K.ERB) 대응</span>
+  <span style="font-size:12px; color:var(--muted);" id="fileStatus">이벤트(KOJO_EVENT_K.ERB) / 트레인(KOJO_TRAIN_K.ERB) 파일 대응</span>
   <nav class="header-nav">
     <a href="era_Readme.html" data-nav="readme">도움말</a>
     <a href="era_Editer_Act.html"   data-nav="act">액션 편집기</a>
@@ -86,8 +86,13 @@ document.addEventListener('DOMContentLoaded', () => {
     { name: '17. 오늘의 방침 구상', key: '17' },
     { name: '18. 임신', key: '18' },
     { name: '102. 조교자 전환', key: '102' },
+    { name: '20. 조교 중 절정', key: '20' },
     { name: '21. 조교 중 대만족', key: '21' },
-    { name: '24. 조교자 능력치 상승', key: '24' }
+    { name: '22. 조교 중 상태 변화', key: '22' },
+    { name: '23. 사니와 능력치 상승', key: '23' },
+    { name: '24. 조교자 능력치 상승', key: '24' },
+    { name: '25. 사니와 자위 중단', key: '25' },
+    { name: '52. 각인 취득', key: '52' }
   ];
 
   /* 이벤트 함수별 조건 설명 매핑 */
@@ -186,8 +191,13 @@ document.addEventListener('DOMContentLoaded', () => {
     '102': [
       { test: /IF\s+LOCAL:1\s*&&\s*ARG\s*==\s*1/, tag: '조교자 변경완료' }
     ],
+    '20': [],
     '21': [],
-    '24': []
+    '22': [],
+    '23': [],
+    '24': [],
+    '25': [],
+    '52': []
   };
 
   /* 함수명에서 이벤트 행동번호 추출: KOJO_EVENT_K번호_행동번호 */

@@ -713,15 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let baseName = currentFileName.replace(/\.erb$/i, '') || 'KOJO_TALK_K1_0';
     const ext = '.ERB';
 
-    let savedFiles = [];
-    try { savedFiles = JSON.parse(localStorage.getItem(SAVED_FILES_KEY) || '[]'); } catch (e) {}
-
     let finalName = baseName + ext;
-    let counter = 1;
-    while (savedFiles.includes(finalName)) {
-      finalName = baseName + '_' + counter + ext;
-      counter++;
-    }
 
     if (window.showSaveFilePicker) {
       try {
